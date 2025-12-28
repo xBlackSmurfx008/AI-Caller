@@ -1,6 +1,7 @@
 """Twilio webhook handlers with full implementation"""
 
 import asyncio
+import os
 from fastapi import APIRouter, Request, Response, WebSocket, WebSocketDisconnect
 from openai import OpenAI
 from twilio.twiml.voice_response import VoiceResponse, Gather
@@ -46,16 +47,32 @@ def _get_chat_model() -> str:
     - `OPENAI_MODEL` may be set to a Realtime-only model (e.g. gpt-4o-realtime-preview).
     - For this Twilio flow we need a standard chat model.
     """
+    if not settings:
+        return "gpt-4o"
     model = (getattr(settings, "OPENAI_MODEL", "") or "").strip()
     if not model:
         return "gpt-4o"
-    if "realtime" in model:
+    if "realtime" in model.lower():
         return "gpt-4o"
     return model
 
 
 def _generate_agent_reply(user_text: str) -> str:
     """Generate a concise, speakable response for a phone call."""
+    global openai_client
+    # Lazy-init in case cold-start import order or env var timing caused init to fail
+    if not openai_client:
+        try:
+            api_key = None
+            if settings and hasattr(settings, "OPENAI_API_KEY"):
+                api_key = settings.OPENAI_API_KEY
+            api_key = api_key or os.getenv("OPENAI_API_KEY")
+            if api_key:
+                openai_client = OpenAI(api_key=api_key)
+        except Exception as e:
+            if logger:
+                logger.warning("openai_client_lazy_init_failed", error=str(e))
+
     if not openai_client:
         return "I'm sorry, the AI service is currently unavailable. Please try again later."
     
@@ -92,39 +109,49 @@ async def twilio_status_callback(request: Request):
         call_status = data.get("CallStatus")
 
         # Best-effort DB updates (may be unavailable in serverless / webhook-only mode)
-        try:
-            from src.database.models import CallStatus as CallStatusEnum
+        if call_handler and call_sid:
+            try:
+                from src.database.models import CallStatus as CallStatusEnum
 
-            status_map = {
-                "initiated": CallStatusEnum.INITIATED,
-                "ringing": CallStatusEnum.RINGING,
-                "in-progress": CallStatusEnum.IN_PROGRESS,
-                "completed": CallStatusEnum.COMPLETED,
-                "failed": CallStatusEnum.FAILED,
-            }
+                status_map = {
+                    "initiated": CallStatusEnum.INITIATED,
+                    "ringing": CallStatusEnum.RINGING,
+                    "in-progress": CallStatusEnum.IN_PROGRESS,
+                    "completed": CallStatusEnum.COMPLETED,
+                    "failed": CallStatusEnum.FAILED,
+                }
 
-            status = status_map.get(call_status)
-            if status and call_sid:
-                call_handler.update_call_status(call_sid, status)
+                status = status_map.get(call_status)
+                if status:
+                    call_handler.update_call_status(call_sid, status)
 
-                # Stop bridge when call ends (only relevant for Media Streams mode)
-                if status in (CallStatusEnum.COMPLETED, CallStatusEnum.FAILED):
-                    call_manager = get_call_manager()
-                    await call_manager.stop_call_bridge(call_sid)
-        except Exception as e:
-            logger.warning(
-                "twilio_status_db_update_skipped",
-                error=str(e),
-                call_sid=call_sid,
-                call_status=call_status,
-            )
+                    # Stop bridge when call ends (only relevant for Media Streams mode)
+                    if status in (CallStatusEnum.COMPLETED, CallStatusEnum.FAILED):
+                        try:
+                            from src.telephony.call_manager import get_call_manager
+                            call_manager = get_call_manager()
+                            await call_manager.stop_call_bridge(call_sid)
+                        except Exception as bridge_error:
+                            if logger:
+                                logger.warning(f"Failed to stop bridge: {bridge_error}")
+            except Exception as e:
+                if logger:
+                    logger.warning(
+                        "twilio_status_db_update_skipped",
+                        error=str(e),
+                        call_sid=call_sid,
+                        call_status=call_status,
+                    )
 
-        logger.info("twilio_status_received", call_sid=call_sid, status=call_status)
+        if logger:
+            logger.info("twilio_status_received", call_sid=call_sid, status=call_status)
         return {"status": "received"}
 
     except Exception as e:
-        logger.error("twilio_status_error", error=str(e))
-        return {"status": "error"}
+        if logger:
+            logger.error("twilio_status_error", error=str(e))
+        # Always return success to Twilio to prevent retries
+        return {"status": "received"}
 
 
 @router.post("/voice")
