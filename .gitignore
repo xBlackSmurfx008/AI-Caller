@@ -66,3 +66,4 @@ config/environments/local.yaml
 *.key
 secrets/
 
+.vercel
