@@ -1,0 +1,19 @@
+/* Desktop-optimized root container */
+#root {
+  width: 100%;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+
+/* Smooth scrolling for desktop */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Remove default focus outlines and use custom ones */
+*:focus-visible {
+  outline: 2px solid var(--ai-state-focus-outline);
+  outline-offset: var(--ai-state-focus-offset);
+  border-radius: var(--ai-radius-sm);
+}

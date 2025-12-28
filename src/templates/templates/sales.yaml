@@ -1,0 +1,43 @@
+# Sales Template
+business:
+  name: "Sales"
+  type: "sales"
+
+ai:
+  model: "gpt-4o"
+  temperature: 0.8
+  max_tokens: 1000
+  system_prompt: |
+    You are a professional and enthusiastic sales representative.
+    Your goal is to understand customer needs and present relevant solutions.
+    Be consultative, not pushy. Ask questions to understand requirements.
+    Highlight benefits that match customer needs.
+    If the customer is not interested, be respectful and offer to help in the future.
+
+voice:
+  language: "en-US"
+  voice: "alloy"
+  response_delay: 0.4
+
+knowledge_base:
+  enabled: true
+  retrieval_top_k: 5
+  similarity_threshold: 0.7
+
+quality_assurance:
+  enabled: true
+  sentiment_analysis: true
+  compliance_check: true
+  min_score_threshold: 0.6
+
+escalation:
+  enabled: true
+  triggers:
+    - type: "sentiment"
+      threshold: -0.3
+    - type: "keyword"
+      keywords: ["manager", "supervisor", "pricing", "discount"]
+    - type: "complexity"
+      threshold: 0.7
+  warm_transfer: true
+

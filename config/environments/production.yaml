@@ -1,0 +1,90 @@
+# Production Environment Configuration
+# This file contains production-specific settings
+# Override default.yaml values for production deployment
+
+# Application Settings
+app:
+  name: "AI Caller"
+  env: "production"
+  debug: false
+  host: "0.0.0.0"
+  port: 8000
+
+# Security Settings
+security:
+  # JWT settings - MUST be overridden with environment variables in production
+  jwt_secret_key: "${JWT_SECRET_KEY}"  # Use environment variable
+  jwt_algorithm: "HS256"
+  jwt_expiration_hours: 24
+  
+  # CORS - restrict to your frontend domain in production
+  cors_origins:
+    - "https://yourdomain.com"
+    - "https://www.yourdomain.com"
+  
+  # Rate limiting
+  rate_limit:
+    requests_per_minute: 100
+    analytics_requests_per_minute: 20
+    websocket_connections_per_user: 10
+
+# Database Settings
+database:
+  # Use connection pooling in production
+  pool_size: 20
+  max_overflow: 10
+  pool_timeout: 30
+  pool_recycle: 3600
+
+# Redis Settings
+redis:
+  # Use connection pooling
+  max_connections: 50
+  socket_timeout: 5
+  socket_connect_timeout: 5
+  retry_on_timeout: true
+
+# Logging Settings
+logging:
+  level: "INFO"  # Use INFO or WARNING in production, not DEBUG
+  format: "json"  # Structured logging for production
+  file:
+    enabled: true
+    path: "/var/log/ai-caller/app.log"
+    max_size_mb: 100
+    backup_count: 10
+
+# Monitoring
+monitoring:
+  prometheus:
+    enabled: true
+    port: 9090
+  health_check:
+    enabled: true
+    interval_seconds: 30
+
+# Feature Flags
+features:
+  qa_enabled: true
+  sentiment_analysis_enabled: true
+  compliance_check_enabled: true
+  escalation_enabled: true
+  email_enabled: true  # Enable email in production
+
+# Performance Settings
+performance:
+  # Knowledge Base
+  kb_cache_ttl: 3600
+  kb_use_cache: true
+  
+  # Request timeouts
+  request_timeout_seconds: 30
+  websocket_timeout_seconds: 300
+
+# Error Handling
+error_handling:
+  # Don't expose internal errors to clients in production
+  expose_internal_errors: false
+  # Log all errors
+  log_all_errors: true
+

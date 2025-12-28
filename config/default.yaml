@@ -1,0 +1,41 @@
+# Default configuration template
+business:
+  name: "Default Business"
+  type: "generic"
+  
+ai:
+  model: "gpt-4o-realtime-preview"  # Best for voice assistants/agents
+  temperature: 0.8  # Optimized for natural voice conversations
+  max_tokens: 4096  # Increased for better context in voice interactions
+  system_prompt: |
+    You are a helpful and professional customer service representative.
+    Be friendly, empathetic, and solution-oriented.
+    If you cannot help, escalate to a human agent.
+
+voice:
+  language: "en-US"
+  voice: "nova"  # Recommended for customer service (clear, professional)
+  response_delay: 0.5
+
+knowledge_base:
+  enabled: true
+  retrieval_top_k: 5
+  similarity_threshold: 0.7
+
+quality_assurance:
+  enabled: true
+  sentiment_analysis: true
+  compliance_check: true
+  min_score_threshold: 0.6
+
+escalation:
+  enabled: true
+  triggers:
+    - type: "sentiment"
+      threshold: -0.5
+    - type: "keyword"
+      keywords: ["manager", "supervisor", "human", "speak to someone"]
+    - type: "complexity"
+      threshold: 0.8
+  warm_transfer: true
+
