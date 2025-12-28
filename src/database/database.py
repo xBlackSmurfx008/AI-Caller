@@ -1,8 +1,10 @@
 """Database connection and session management"""
 
+from urllib.parse import urlparse
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.pool import QueuePool
+from sqlalchemy.pool import QueuePool, NullPool
 
 from src.database.models import Base
 from src.utils.config import get_settings
@@ -17,16 +19,34 @@ pool_size = getattr(settings, 'DB_POOL_SIZE', 5)
 max_overflow = getattr(settings, 'DB_MAX_OVERFLOW', 10)
 pool_timeout = getattr(settings, 'DB_POOL_TIMEOUT', 30)
 
-engine = create_engine(
-    settings.DATABASE_URL,
-    poolclass=QueuePool,
-    pool_size=pool_size,
-    max_overflow=max_overflow,
-    pool_timeout=pool_timeout,
-    pool_pre_ping=True,  # Verify connections before using
-    echo=settings.APP_DEBUG,
-    future=True,
-)
+db_url = settings.DATABASE_URL
+is_sqlite = urlparse(db_url).scheme == "sqlite"
+
+# SQLite needs different pooling/connection args (especially in serverless / multithreaded contexts)
+engine_kwargs = {
+    "echo": settings.APP_DEBUG,
+    "future": True,
+}
+
+if is_sqlite:
+    engine_kwargs.update(
+        {
+            "poolclass": NullPool,
+            "connect_args": {"check_same_thread": False},
+        }
+    )
+else:
+    engine_kwargs.update(
+        {
+            "poolclass": QueuePool,
+            "pool_size": pool_size,
+            "max_overflow": max_overflow,
+            "pool_timeout": pool_timeout,
+            "pool_pre_ping": True,  # Verify connections before using
+        }
+    )
+
+engine = create_engine(db_url, **engine_kwargs)
 
 # Create session factory
 SessionLocal = sessionmaker(

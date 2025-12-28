@@ -36,7 +36,9 @@ class Settings(BaseSettings):
     TWILIO_WEBHOOK_URL: str = ""
 
     # Database
-    DATABASE_URL: str
+    # NOTE: In serverless environments (e.g., Vercel), missing env vars should not crash boot.
+    # Production should override this with a real Postgres URL (e.g., Neon).
+    DATABASE_URL: str = "sqlite:////tmp/ai_caller.db"
     REDIS_URL: str = "redis://localhost:6379/0"
 
     # Vector Database - Pinecone
