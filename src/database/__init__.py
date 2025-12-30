@@ -1,2 +1,2 @@
-"""Database models and schemas"""
+"""Database package"""
 

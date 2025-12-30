@@ -14,8 +14,85 @@ from src.database.models import (
 from src.telephony.twilio_client import TwilioService
 from src.telephony.call_manager import get_call_manager
 from src.utils.logging import get_logger
+from src.memory.interaction_capture import capture_call_transcript_sync
+from src.memory.memory_service import MemoryService
 
 logger = get_logger(__name__)
+memory_service = MemoryService()
+
+
+def _capture_call_transcript_for_memory(db: Session, call: Call) -> None:
+    """
+    Capture call transcript when call completes
+    
+    Args:
+        db: Database session
+        call: Call record
+    """
+    try:
+        # Try to get transcript from conversation manager via bridge
+        call_manager = get_call_manager()
+        bridge = call_manager.get_bridge(call.twilio_call_sid)
+        
+        transcript = None
+        if bridge and hasattr(bridge, 'conversation_manager'):
+            # Try to get full transcript from conversation manager
+            try:
+                if hasattr(bridge.conversation_manager, 'get_full_transcript'):
+                    transcript = bridge.conversation_manager.get_full_transcript()
+                elif hasattr(bridge.conversation_manager, 'conversation'):
+                    # Fallback: try to reconstruct from conversation
+                    conv = bridge.conversation_manager.conversation
+                    if conv:
+                        parts = []
+                        for item in conv:
+                            speaker = item.get('speaker', 'unknown')
+                            text = item.get('text', '')
+                            parts.append(f"{speaker}: {text}")
+                        transcript = "\n".join(parts)
+            except Exception as e:
+                logger.warning("transcript_retrieval_failed", error=str(e), call_id=call.id)
+        
+        # If no transcript from conversation manager, try Twilio
+        if not transcript or len(transcript.strip()) < 10:
+            try:
+                from src.telephony.twilio_client import TwilioService
+                twilio = TwilioService()
+                # Try to get recording/transcript from Twilio if available
+                # Note: This would require Twilio transcription to be enabled
+                # For now, we'll just use what we have
+                pass
+            except Exception as e:
+                logger.warning("twilio_transcript_retrieval_failed", error=str(e))
+        
+        # Find contact by phone number
+        contact = None
+        if call.from_number:
+            contact = memory_service.find_contact_by_identifier(db, phone_number=call.from_number)
+        if not contact and call.to_number:
+            contact = memory_service.find_contact_by_identifier(db, phone_number=call.to_number)
+        
+        if contact and transcript and len(transcript.strip()) >= 10:
+            # Store transcript using sync wrapper
+            capture_call_transcript_sync(
+                db=db,
+                contact_id=contact.id,
+                transcript=transcript,
+                call_sid=call.twilio_call_sid,
+                metadata={
+                    "direction": call.direction.value if hasattr(call.direction, 'value') else str(call.direction),
+                    "from_number": call.from_number,
+                    "to_number": call.to_number,
+                    "call_id": call.id
+                }
+            )
+        elif not contact:
+            logger.info("call_transcript_skipped_no_contact", call_sid=call.twilio_call_sid)
+        elif not transcript or len(transcript.strip()) < 10:
+            logger.info("call_transcript_skipped_too_short", call_sid=call.twilio_call_sid)
+            
+    except Exception as e:
+        logger.error("call_transcript_capture_error", error=str(e), call_id=call.id)
 
 
 class CallHandler:
@@ -331,6 +408,12 @@ class CallHandler:
             call.status = status
             if status == CallStatus.COMPLETED:
                 call.ended_at = datetime.utcnow()
+                
+                # Capture call transcript for memory system
+                try:
+                    _capture_call_transcript_for_memory(db, call)
+                except Exception as e:
+                    logger.error("call_transcript_capture_failed", error=str(e), call_sid=call_sid)
 
             db.commit()
             db.refresh(call)

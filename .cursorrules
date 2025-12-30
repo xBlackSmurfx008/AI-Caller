@@ -1,0 +1,16 @@
+## Cursor Rules (Project: AI Caller)
+
+### Verification / Honesty
+- Never claim that **local Google Chrome** (user’s machine) was opened or used unless the user explicitly confirms it.
+- When browser testing is performed using Cursor tools, say **“Cursor automation browser”** (not Chrome) and state what was checked.
+- Never claim UI/CSS “works” without at least one of:
+  - a reproducible check (build succeeds, endpoint returns expected JSON), or
+  - a screenshot/snapshot taken in the Cursor automation browser, or
+  - user confirmation from their local browser.
+- If there is uncertainty, say so directly and ask for the minimum missing evidence (console error text or screenshot).
+
+### Default debugging discipline
+- If the user reports something broken, assume it is broken even if internal tooling shows otherwise, and reconcile by gathering evidence.
+- Prefer fixes that increase compatibility (e.g., Python 3.13+ removal of stdlib modules) over “works on my machine” assumptions.
+
+

@@ -49,5 +49,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
 
 # Run the application with production settings
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--no-access-log"]
+# NOTE: Keep a single worker by default. WebSockets (Twilio Media Streams) and the in-memory
+# CallManager bridge map require sticky, single-process behavior unless you introduce shared state.
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--no-access-log"]
 

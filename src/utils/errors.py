@@ -33,16 +33,6 @@ class OpenAIError(AICallerError):
     pass
 
 
-class KnowledgeBaseError(AICallerError):
-    """Knowledge base errors"""
-    pass
-
-
-class EscalationError(AICallerError):
-    """Escalation system errors"""
-    pass
-
-
 class ConfigurationError(AICallerError):
     """Configuration errors"""
     pass
@@ -58,12 +48,6 @@ class NotFoundError(AICallerError):
     pass
 
 
-class DocumentationScrapingError(AICallerError):
-    """Documentation scraping errors"""
+class TaskError(AICallerError):
+    """Task execution errors"""
     pass
-
-
-class SyncError(AICallerError):
-    """Documentation sync errors"""
-    pass
-

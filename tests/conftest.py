@@ -1,31 +1,43 @@
 """Pytest configuration and fixtures"""
 
+import os
+
 import pytest
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
-from fastapi.testclient import TestClient
-from passlib.context import CryptContext
-import uuid
+from sqlalchemy.orm import sessionmaker
 
-from src.database.database import Base, get_db
-from src.database.models import User
-from src.main import app
-from src.api.routes.auth import create_access_token
+# Ensure required settings exist for imports that happen during test collection.
+# This prevents local `.env` values from breaking CI / sandboxed test runs.
+os.environ.setdefault("APP_ENV", "test")
+os.environ.setdefault("OPENAI_API_KEY", "test-openai-key")
+os.environ.setdefault("TWILIO_ACCOUNT_SID", "AC" + ("0" * 32))
+os.environ.setdefault("TWILIO_AUTH_TOKEN", "test-twilio-token")
+os.environ.setdefault("TWILIO_PHONE_NUMBER", "+15550001111")
 
-# Use in-memory SQLite for testing
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
-)
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# Use an absolute SQLite path so all threads/sessions hit the same file.
+_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+os.environ.setdefault("DATABASE_URL", f"sqlite:///{_ROOT}/test_suite.db")
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Disable Godfather token enforcement for existing route tests unless explicitly enabled.
+os.environ.setdefault("GODFATHER_API_TOKEN", "")
 
+from src.utils.config import get_settings
+
+get_settings.cache_clear()
+
+from src.database.database import Base
+from src.database import models  # noqa: F401  (populate Base.metadata)
+
+# Test database URL
+SQLALCHEMY_DATABASE_URL = f"sqlite:///{_ROOT}/test_contacts.db"
 
 @pytest.fixture(scope="function")
-def db():
-    """Create a test database session"""
+def test_db():
+    """Create a fresh test database for each test"""
+    engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
     Base.metadata.create_all(bind=engine)
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    
     db = TestingSessionLocal()
     try:
         yield db
@@ -35,58 +47,7 @@ def db():
 
 
 @pytest.fixture(scope="function")
-def db_session(db):
-    """Alias for db fixture for compatibility"""
-    return db
-
-
-@pytest.fixture(scope="function")
-def client(db):
-    """Create a test client"""
-    def override_get_db():
-        try:
-            yield db
-        finally:
-            pass
-    
-    app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as test_client:
-        yield test_client
-    app.dependency_overrides.clear()
-
-
-@pytest.fixture
-def test_user(db: Session):
-    """Create a test user"""
-    user = User(
-        id=str(uuid.uuid4()),
-        email="test@example.com",
-        hashed_password=pwd_context.hash("testpassword"),
-        name="Test User",
-        is_active=True,
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return user
-
-
-def create_test_user(db: Session, email: str = "test@example.com", password: str = "testpassword"):
-    """Helper function to create a test user"""
-    user = User(
-        id=str(uuid.uuid4()),
-        email=email,
-        hashed_password=pwd_context.hash(password),
-        name="Test User",
-        is_active=True,
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return user
-
-
-def get_auth_token(user: User) -> str:
-    """Get auth token for a user"""
-    return create_access_token(data={"sub": user.id})
+def db_session(test_db):
+    """Back-compat fixture name used by some tests."""
+    yield test_db
 

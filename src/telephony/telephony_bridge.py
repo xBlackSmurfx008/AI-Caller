@@ -40,6 +40,9 @@ class TelephonyBridge:
         self.media_stream_handler = media_stream_handler
         self.session_id = f"{call_id}_{call_sid}"
         self.is_active = False
+        # Resampler state for continuous streams (audioop.ratecv)
+        self._twilio_to_openai_state = None
+        self._openai_to_twilio_state = None
 
     async def start(
         self,
@@ -181,10 +184,12 @@ class TelephonyBridge:
         to_sample_rate: int,
     ) -> bytes:
         """
-        Convert audio format (simple resampling)
-        
-        Note: This is a simplified implementation.
-        For production, consider using a proper audio library like librosa or pydub.
+        Convert audio sample rate for PCM16 mono audio.
+
+        Notes:
+        - `audioop` was removed in Python 3.13+. This code must run on Python 3.14 in your env.
+        - We therefore implement a simple, deterministic resampler that is correct for the
+          common 8kHz <-> 24kHz conversion used by Twilio <-> OpenAI.
         
         Args:
             audio_data: Input PCM16 audio data
@@ -197,35 +202,15 @@ class TelephonyBridge:
         if from_sample_rate == to_sample_rate:
             return audio_data
 
-        # Simple linear interpolation resampling
-        # This is a basic implementation - for production, use proper resampling
         try:
-            # Unpack 16-bit PCM samples
-            samples = struct.unpack(f"<{len(audio_data) // 2}h", audio_data)
+            # Fast paths for the only rates we care about right now.
+            if from_sample_rate == 8000 and to_sample_rate == 24000:
+                return _pcm16_resample_x3(audio_data)
+            if from_sample_rate == 24000 and to_sample_rate == 8000:
+                return _pcm16_resample_div3(audio_data)
 
-            # Calculate resampling ratio
-            ratio = to_sample_rate / from_sample_rate
-
-            # Resample (linear interpolation)
-            if ratio > 1:
-                # Upsample
-                new_samples = []
-                for i in range(len(samples)):
-                    new_samples.append(samples[i])
-                    # Interpolate additional samples
-                    if i < len(samples) - 1:
-                        for j in range(1, int(ratio)):
-                            interpolated = int(
-                                samples[i] + (samples[i + 1] - samples[i]) * (j / ratio)
-                            )
-                            new_samples.append(interpolated)
-            else:
-                # Downsample
-                step = int(1 / ratio)
-                new_samples = samples[::step]
-
-            # Pack back to bytes
-            return struct.pack(f"<{len(new_samples)}h", *new_samples)
+            # Generic fallback (linear interpolation) for other ratios.
+            return _pcm16_resample_linear(audio_data, from_sample_rate, to_sample_rate)
 
         except Exception as e:
             logger.error("audio_conversion_error", error=str(e))
@@ -271,4 +256,70 @@ class TelephonyBridge:
             logger.info("telephony_bridge_stopped", call_id=self.call_id, call_sid=self.call_sid)
         except Exception as e:
             logger.error("telephony_bridge_stop_error", error=str(e), call_id=self.call_id)
+
+
+def _pcm16_unpack_mono(pcm16: bytes) -> list[int]:
+    if not pcm16:
+        return []
+    if len(pcm16) % 2 != 0:
+        pcm16 = pcm16[:-1]
+    return list(struct.unpack(f"<{len(pcm16)//2}h", pcm16))
+
+
+def _pcm16_pack_mono(samples: list[int]) -> bytes:
+    if not samples:
+        return b""
+    # Clamp to int16
+    clamped = [max(-32768, min(32767, int(s))) for s in samples]
+    return struct.pack(f"<{len(clamped)}h", *clamped)
+
+
+def _pcm16_resample_x3(pcm16_8k: bytes) -> bytes:
+    """
+    Upsample PCM16 mono from 8kHz -> 24kHz (exact factor 3).
+    Uses linear interpolation between adjacent samples.
+    """
+    src = _pcm16_unpack_mono(pcm16_8k)
+    if len(src) < 2:
+        return pcm16_8k
+    out: list[int] = []
+    for i in range(len(src) - 1):
+        s0 = src[i]
+        s1 = src[i + 1]
+        out.append(s0)
+        out.append(int(s0 + (s1 - s0) * (1 / 3)))
+        out.append(int(s0 + (s1 - s0) * (2 / 3)))
+    out.append(src[-1])
+    return _pcm16_pack_mono(out)
+
+
+def _pcm16_resample_div3(pcm16_24k: bytes) -> bytes:
+    """
+    Downsample PCM16 mono from 24kHz -> 8kHz (exact factor 3).
+    Simple decimation (take every 3rd sample).
+    """
+    src = _pcm16_unpack_mono(pcm16_24k)
+    if not src:
+        return b""
+    out = src[::3]
+    return _pcm16_pack_mono(out)
+
+
+def _pcm16_resample_linear(pcm16: bytes, from_hz: int, to_hz: int) -> bytes:
+    """Generic linear interpolation resampler for PCM16 mono."""
+    src = _pcm16_unpack_mono(pcm16)
+    if len(src) < 2 or from_hz <= 0 or to_hz <= 0:
+        return pcm16
+    ratio = to_hz / from_hz
+    out_len = max(1, int(len(src) * ratio))
+    out: list[int] = []
+    for j in range(out_len):
+        pos = j / ratio
+        i = int(pos)
+        frac = pos - i
+        if i >= len(src) - 1:
+            out.append(src[-1])
+        else:
+            out.append(int(src[i] + (src[i + 1] - src[i]) * frac))
+    return _pcm16_pack_mono(out)
 

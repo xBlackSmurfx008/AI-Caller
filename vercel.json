@@ -4,33 +4,26 @@
     {
       "src": "api/index.py",
       "use": "@vercel/python"
+    },
+    {
+      "src": "frontend/dist/**",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
+    { "src": "/api/(.*)", "dest": "api/index.py" },
+    { "src": "/webhooks/(.*)", "dest": "api/index.py" },
+    { "src": "/docs", "dest": "api/index.py" },
+    { "src": "/redoc", "dest": "api/index.py" },
+    { "src": "/health", "dest": "api/index.py" },
     {
-      "src": "/api/(.*)",
-      "dest": "api/index.py"
+      "src": "/assets/(.*)",
+      "dest": "frontend/dist/assets/$1",
+      "headers": { "Cache-Control": "public, max-age=31536000, immutable" }
     },
-    {
-      "src": "/webhooks/(.*)",
-      "dest": "api/index.py"
-    },
-    {
-      "src": "/docs",
-      "dest": "api/index.py"
-    },
-    {
-      "src": "/redoc",
-      "dest": "api/index.py"
-    },
-    {
-      "src": "/health",
-      "dest": "api/index.py"
-    },
-    {
-      "src": "/",
-      "dest": "api/index.py"
-    }
+    { "src": "/vite.svg", "dest": "frontend/dist/vite.svg" },
+    { "src": "/auto-config.json", "dest": "frontend/dist/auto-config.json" },
+    { "src": "/((?!api|webhooks|docs|redoc|health).*)", "dest": "frontend/dist/index.html" }
   ],
   "env": {
     "PYTHON_VERSION": "3.11"

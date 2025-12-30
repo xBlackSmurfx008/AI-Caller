@@ -395,3 +395,117 @@ class TwilioService:
         pattern = r'^\+[1-9]\d{1,14}$'
         return bool(re.match(pattern, phone_number))
 
+    def send_message(
+        self,
+        to_number: str,
+        body: str,
+        from_number: Optional[str] = None,
+        media_urls: Optional[List[str]] = None,
+        status_callback: Optional[str] = None,
+    ) -> dict:
+        """
+        Send SMS/MMS/WhatsApp message via Twilio
+        
+        Args:
+            to_number: Phone number to send to (E.164 format)
+            body: Message body text
+            from_number: Phone number to send from (defaults to configured number)
+            media_urls: Optional list of media URLs for MMS
+            status_callback: Optional URL for status callbacks
+            
+        Returns:
+            Dictionary with message information
+        """
+        try:
+            from_number = from_number or self.phone_number
+            status_callback = status_callback or f"{self.webhook_url}/webhooks/twilio/message-status"
+            
+            # Determine channel based on from_number (whatsapp: prefix or regular SMS)
+            if from_number.startswith("whatsapp:"):
+                channel = "whatsapp"
+            elif media_urls:
+                channel = "mms"
+            else:
+                channel = "sms"
+            
+            # Create message parameters
+            message_params = {
+                "to": to_number,
+                "from_": from_number,
+                "body": body,
+            }
+            
+            if media_urls:
+                message_params["media_url"] = media_urls
+            
+            if status_callback:
+                message_params["status_callback"] = status_callback
+            
+            # Send message
+            message = self.client.messages.create(**message_params)
+            
+            logger.info(
+                "message_sent",
+                message_sid=message.sid,
+                to_number=to_number,
+                from_number=from_number,
+                channel=channel
+            )
+            
+            return {
+                "message_sid": message.sid,
+                "status": message.status,
+                "to": message.to,
+                "from": message.from_,
+                "channel": channel,
+                "body": message.body,
+                "date_created": message.date_created.isoformat() if message.date_created else None,
+            }
+        except TwilioException as e:
+            logger.error("twilio_message_error", error=str(e), to_number=to_number)
+            raise TelephonyError(f"Failed to send message: {str(e)}") from e
+
+    def get_message(self, message_sid: str) -> dict:
+        """
+        Get message information from Twilio
+        
+        Args:
+            message_sid: Twilio message SID
+            
+        Returns:
+            Dictionary with message information
+        """
+        try:
+            message = self.client.messages(message_sid).fetch()
+            
+            # Determine channel
+            if message.from_.startswith("whatsapp:") or message.to.startswith("whatsapp:"):
+                channel = "whatsapp"
+            elif message.num_media and int(message.num_media) > 0:
+                channel = "mms"
+            else:
+                channel = "sms"
+            
+            # Get media URLs if MMS
+            media_urls = []
+            if message.num_media and int(message.num_media) > 0:
+                media_list = self.client.messages(message_sid).media.list()
+                media_urls = [media.uri for media in media_list]
+            
+            return {
+                "message_sid": message.sid,
+                "status": message.status,
+                "to": message.to,
+                "from": message.from_,
+                "body": message.body,
+                "channel": channel,
+                "media_urls": media_urls,
+                "date_created": message.date_created.isoformat() if message.date_created else None,
+                "date_sent": message.date_sent.isoformat() if message.date_sent else None,
+                "error_code": message.error_code,
+                "error_message": message.error_message,
+            }
+        except TwilioException as e:
+            logger.error("twilio_get_message_error", error=str(e), message_sid=message_sid)
+            raise TelephonyError(f"Failed to get message: {str(e)}") from e
+

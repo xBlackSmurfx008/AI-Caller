@@ -66,4 +66,12 @@ config/environments/local.yaml
 *.key
 secrets/
 
+# OAuth credentials and tokens (contain secrets)
+config/google_oauth_credentials.json
+config/google_oauth_token.json
+
+# Auto-config with API keys
+frontend/public/auto-config.json
+
 .vercel
+.env*.local

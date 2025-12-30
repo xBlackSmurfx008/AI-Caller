@@ -1,186 +1,164 @@
-# Deployment Guide
+# Deployment Guide for Neon/Vercel
 
-This guide covers deploying the AI Caller system to production.
+This guide covers deploying the AI Caller application to Vercel with Neon PostgreSQL database.
 
 ## Prerequisites
 
-- Python 3.11+
-- PostgreSQL 14+
-- Redis 7+
-- Node.js 18+ (for frontend)
-- Docker and Docker Compose (optional)
+1. **Vercel Account**: Sign up at [vercel.com](https://vercel.com)
+2. **Neon Account**: Sign up at [neon.tech](https://neon.tech) for PostgreSQL database
+3. **GitHub Repository**: Your code should be in a GitHub repository
 
-## Environment Variables
+## Step 1: Set Up Neon Database
 
-Create a `.env` file in the root directory with the following variables:
+1. Create a new project in Neon
+2. Copy the connection string (it will look like: `postgresql://user:password@host.neon.tech:5432/dbname?sslmode=require`)
+3. Note: You'll need this for environment variables
+
+## Step 2: Configure Vercel Environment Variables
+
+In your Vercel project settings, add the following environment variables:
+
+### Required Variables
 
 ```bash
 # Application
-APP_NAME=AI Caller
 APP_ENV=production
-APP_DEBUG=false
-APP_HOST=0.0.0.0
-APP_PORT=8000
-SECRET_KEY=<generate-secure-random-key>
-
-# Database
-DATABASE_URL=postgresql://user:password@localhost:5432/ai_caller
-
-# Redis
-REDIS_URL=redis://localhost:6379/0
+SECRET_KEY=<generate-a-strong-random-key>
 
 # OpenAI
-OPENAI_API_KEY=sk-your-key-here
-OPENAI_MODEL=gpt-4o
+OPENAI_API_KEY=<your-openai-api-key>
 
 # Twilio
-TWILIO_ACCOUNT_SID=ACxxxxx
-TWILIO_AUTH_TOKEN=your-token
-TWILIO_PHONE_NUMBER=+1234567890
-TWILIO_WEBHOOK_URL=https://your-domain.com/webhooks
+TWILIO_ACCOUNT_SID=<your-twilio-account-sid>
+TWILIO_AUTH_TOKEN=<your-twilio-auth-token>
+TWILIO_PHONE_NUMBER=<your-twilio-phone-number>
+TWILIO_WEBHOOK_URL=https://your-domain.vercel.app
 
-# JWT
-JWT_SECRET_KEY=<generate-secure-random-key>
-JWT_ALGORITHM=HS256
-JWT_EXPIRATION_HOURS=24
+# Database (Neon)
+DATABASE_URL=<your-neon-connection-string>
 
-# Email (Optional)
-EMAIL_ENABLED=true
+# Godfather Identity
+GODFATHER_PHONE_NUMBERS=<comma-separated-phone-numbers>
+GODFATHER_EMAIL=<your-email>
+```
+
+### Optional Variables
+
+```bash
+# Google Calendar OAuth (if using)
+GOOGLE_OAUTH_CLIENT_SECRETS_JSON=<json-string>
+GOOGLE_CALENDAR_ID=primary
+
+# Email Configuration (if using email tool)
 SMTP_SERVER=smtp.gmail.com
 SMTP_PORT=587
-SMTP_USERNAME=your-email@gmail.com
-SMTP_PASSWORD=your-app-password
-SMTP_FROM_EMAIL=your-email@gmail.com
-SMTP_FROM_NAME=AI Caller
-FRONTEND_URL=https://your-frontend-domain.com
+SMTP_USERNAME=<your-email>
+SMTP_PASSWORD=<app-password>
+SMTP_FROM_EMAIL=<your-email>
 
-# Vector Database (choose one)
-PINECONE_API_KEY=
-PINECONE_ENVIRONMENT=
-PINECONE_INDEX_NAME=ai-caller-knowledge
+# CORS (defaults to *)
+CORS_ORIGINS=https://your-domain.vercel.app
 
-# Or
-WEAVIATE_URL=http://localhost:8080
-WEAVIATE_API_KEY=
-
-# Or use Chroma (default)
-CHROMA_PERSIST_DIR=./chroma_db
+# Frontend API URL (if different from same domain)
+VITE_API_URL=https://your-domain.vercel.app
 ```
 
-## Backend Deployment
+## Step 3: Deploy to Vercel
 
-### Using Docker Compose (Recommended)
+### Option A: Via Vercel Dashboard
 
-1. Clone the repository
-2. Copy `.env.example` to `.env` and configure
-3. Run:
-```bash
-docker-compose up -d
-```
+1. Go to [vercel.com/new](https://vercel.com/new)
+2. Import your GitHub repository
+3. Configure project:
+   - **Framework Preset**: Other
+   - **Root Directory**: Leave as default (or set if needed)
+   - **Build Command**: Leave empty (Vercel will auto-detect)
+   - **Output Directory**: Leave empty
+4. Add all environment variables from Step 2
+5. Click "Deploy"
 
-### Manual Deployment
-
-1. Install dependencies:
-```bash
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
-
-2. Set up database:
-```bash
-alembic upgrade head
-```
-
-3. Run migrations:
-```bash
-python scripts/run_migrations.py
-```
-
-4. Start the application:
-```bash
-uvicorn src.main:app --host 0.0.0.0 --port 8000
-```
-
-### Production Server (Gunicorn)
+### Option B: Via Vercel CLI
 
 ```bash
-gunicorn src.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+# Install Vercel CLI
+npm i -g vercel
+
+# Login
+vercel login
+
+# Deploy
+vercel
+
+# For production
+vercel --prod
 ```
 
-## Frontend Deployment
+## Step 4: Verify Deployment
 
-1. Install dependencies:
-```bash
-cd frontend
-npm install
+1. Check the health endpoint: `https://your-domain.vercel.app/health`
+2. Check API docs: `https://your-domain.vercel.app/docs`
+3. Test the frontend: `https://your-domain.vercel.app`
+
+## Step 5: Database Migration
+
+The database tables will be automatically created on first API request. However, for production, you may want to run migrations manually:
+
+```python
+# In a local environment with DATABASE_URL set
+from src.database.database import init_db
+init_db()
 ```
 
-2. Build for production:
-```bash
-npm run build
-```
+## Troubleshooting
 
-3. Serve static files (using nginx example):
-```nginx
-server {
-    listen 80;
-    server_name your-domain.com;
-    
-    root /path/to/frontend/dist;
-    index index.html;
-    
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-    
-    location /api {
-        proxy_pass http://localhost:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-    
-    location /ws {
-        proxy_pass http://localhost:8000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-    }
-}
-```
+### Database Connection Issues
 
-## Celery Worker
+- Verify `DATABASE_URL` is correctly formatted
+- Ensure SSL mode is set: `?sslmode=require` at the end of connection string
+- Check Neon dashboard for connection limits
 
-For background tasks, run Celery worker:
+### API Routes Not Working
 
-```bash
-celery -A src.celery_app worker --loglevel=info
-```
+- Verify all routers are included in `api/index.py`
+- Check Vercel function logs for import errors
+- Ensure all dependencies are in `api/requirements.txt`
 
-## Monitoring
+### Frontend Not Loading
 
-- Health check: `GET /health`
-- API docs: `GET /docs`
-- Flower (Celery monitoring): `http://localhost:5555`
+- Verify `vercel.json` routing configuration
+- Check that frontend build completes successfully
+- Ensure static files are being served correctly
 
-## Security Checklist
+### Environment Variables Not Loading
 
-- [ ] Change all default secrets
-- [ ] Enable HTTPS
-- [ ] Configure CORS properly
-- [ ] Set up firewall rules
-- [ ] Enable database backups
-- [ ] Configure log rotation
-- [ ] Set up monitoring and alerts
-- [ ] Review and restrict API endpoints
-- [ ] Enable rate limiting
-- [ ] Set up SSL certificates
+- Verify variables are set in Vercel dashboard
+- Restart deployment after adding new variables
+- Check variable names match exactly (case-sensitive)
 
-## Scaling
+## Testing Connections
 
-- Use a load balancer for multiple backend instances
-- Configure Redis for session storage
-- Use a managed PostgreSQL service
-- Set up horizontal scaling for Celery workers
-- Use CDN for frontend assets
+After deployment, test these endpoints:
+
+1. **Health Check**: `GET /health`
+2. **API Root**: `GET /`
+3. **Tasks API**: `GET /api/tasks/`
+4. **Calendar Status**: `GET /api/calendar/status`
+5. **Settings**: `GET /api/settings/godfather`
+
+## Post-Deployment Checklist
+
+- [ ] Database connection working
+- [ ] All API endpoints responding
+- [ ] Frontend loading correctly
+- [ ] Environment variables configured
+- [ ] Twilio webhooks configured (update webhook URL in Twilio console)
+- [ ] CORS configured for your domain
+- [ ] Google Calendar OAuth configured (if using)
+
+## Notes
+
+- The application uses SQLite as a fallback if `DATABASE_URL` is not set (for local development)
+- In production, always use Neon PostgreSQL via `DATABASE_URL`
+- Task storage is now persistent using the database
+- All routes are included in the Vercel serverless function
 

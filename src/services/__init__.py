@@ -1,6 +1,6 @@
-"""Services layer for business logic"""
+"""Service registry for managing singleton service instances"""
 
-from src.services.knowledge_service import KnowledgeService
+from src.services.registry import ServiceRegistry, get_service_registry
 
-__all__ = ["KnowledgeService"]
+__all__ = ["ServiceRegistry", "get_service_registry"]
 

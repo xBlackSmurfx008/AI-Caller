@@ -17,104 +17,93 @@ class Settings(BaseSettings):
     )
 
     # Application
-    APP_NAME: str = "AI Caller"
+    APP_NAME: str = "AI Voice Assistant"
     APP_ENV: str = "development"
     APP_DEBUG: bool = True
     APP_HOST: str = "0.0.0.0"
     APP_PORT: int = 8000
+    FRONTEND_URL: str = ""  # URL of the frontend (e.g. https://myapp.vercel.app or http://localhost:5173)
     SECRET_KEY: str = "change-me-in-production"
 
     # OpenAI
     OPENAI_API_KEY: str
-    OPENAI_MODEL: str = "gpt-4o-realtime-preview"  # Best for voice assistants/agents
+    OPENAI_MODEL: str = "gpt-4o"  # Standard model for Agents SDK
+    # Prefer Responses API over chat.completions when available (optional migration)
+    OPENAI_USE_RESPONSES: bool = False
     OPENAI_REALTIME_API_URL: str = "wss://api.openai.com/v1/realtime"
+    OPENAI_REALTIME_MODEL: str = "gpt-4o-realtime-preview"  # or "gpt-realtime" for production
+    OPENAI_REALTIME_VOICE: str = "alloy"  # Options: alloy, echo, fable, onyx, nova, shimmer
+    
+    # OpenAI Advanced Features
+    OPENAI_ENABLE_STREAMING: bool = True  # Stream chat responses
+    OPENAI_USE_STRUCTURED_OUTPUTS: bool = True  # Force valid JSON responses
 
     # Twilio
     TWILIO_ACCOUNT_SID: str
     TWILIO_AUTH_TOKEN: str
     TWILIO_PHONE_NUMBER: str
     TWILIO_WEBHOOK_URL: str = ""
+    # Enable Twilio Media Streams (WebSocket) for true voice-to-voice.
+    # If false, we fall back to the Gather/Say loop.
+    TWILIO_MEDIA_STREAMS_ENABLED: bool = False
+    # Optional: explicitly set the public WS base, e.g. wss://xxxxx.ngrok.app
+    TWILIO_MEDIA_STREAMS_WS_BASE_URL: str = ""
 
-    # Database
-    # NOTE: In serverless environments (e.g., Vercel), missing env vars should not crash boot.
-    # Production should override this with a real Postgres URL (e.g., Neon).
-    DATABASE_URL: str = "sqlite:////tmp/ai_caller.db"
-    REDIS_URL: str = "redis://localhost:6379/0"
-
-    # Vector Database - Pinecone
-    PINECONE_API_KEY: str = ""
-    PINECONE_ENVIRONMENT: str = ""
-    PINECONE_INDEX_NAME: str = "ai-caller-knowledge"
-
-    # Vector Database - Weaviate
-    WEAVIATE_URL: str = "http://localhost:8080"
-    WEAVIATE_API_KEY: str = ""
-
-    # Vector Database - Chroma
-    CHROMA_PERSIST_DIR: str = "./chroma_db"
-
-    # Celery
-    CELERY_BROKER_URL: str = "redis://localhost:6379/1"
-    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/2"
-
-    # Monitoring
-    PROMETHEUS_PORT: int = 9090
-
-    # Security
-    JWT_SECRET_KEY: str = "change-me-in-production"
-    JWT_ALGORITHM: str = "HS256"
-    JWT_EXPIRATION_HOURS: int = 24
-
-    # Quality Assurance
-    QA_ENABLED: bool = True
-    SENTIMENT_ANALYSIS_ENABLED: bool = True
-    COMPLIANCE_CHECK_ENABLED: bool = True
-
-    # Escalation
-    ESCALATION_ENABLED: bool = True
-    HUMAN_AGENT_QUEUE_URL: str = "redis://localhost:6379/3"
-
-    # Knowledge Base
-    KB_CHUNKING_STRATEGY: str = "adaptive"  # semantic, hierarchical, sliding_window, adaptive
-    KB_CHUNK_SIZE: int = 1000
-    KB_CHUNK_OVERLAP: int = 200
-    KB_EMBEDDING_MODEL: str = "text-embedding-3-small"
-
-    # Email Configuration
-    EMAIL_ENABLED: bool = False
+    # Email (for email tool)
     SMTP_SERVER: str = "smtp.gmail.com"
     SMTP_PORT: int = 587
     SMTP_USERNAME: str = ""
     SMTP_PASSWORD: str = ""
     SMTP_FROM_EMAIL: str = ""
-    SMTP_FROM_NAME: str = "AI Caller"
-    FRONTEND_URL: str = "http://localhost:3000"
-    KB_USE_CACHE: bool = True
-    KB_CACHE_TTL: int = 3600
-    KB_HYBRID_SEARCH_ENABLED: bool = True
-    KB_SEMANTIC_WEIGHT: float = 0.7
-    KB_KEYWORD_WEIGHT: float = 0.3
-    KB_RERANKING_ENABLED: bool = True
-    KB_USE_CROSS_ENCODER: bool = True
-    KB_TOP_K: int = 5
-    KB_SIMILARITY_THRESHOLD: float = 0.7
-    KB_VOICE_OPTIMIZATION: bool = True
-    KB_MAX_CONTEXT_LENGTH: int = 2000
-    KB_VOICE_MAX_LENGTH: int = 500
-    KB_FEEDBACK_ENABLED: bool = True
-    KB_ANALYTICS_ENABLED: bool = True
+
+    # Godfather identity / allowlist
+    # Comma-separated E.164 numbers, e.g. "+15551234567,+15557654321"
+    GODFATHER_PHONE_NUMBERS: str = ""
+    GODFATHER_EMAIL: str = ""
+
+    # Auto-execute mode: skip confirmation prompts for high-risk actions
+    # When True, the AI will execute calls, SMS, emails, and calendar changes immediately
+    AUTO_EXECUTE_HIGH_RISK: bool = True
+
+    # Google Calendar (OAuth)
+    # Provide either a path to a client secrets JSON, or JSON inline.
+    GOOGLE_OAUTH_CLIENT_SECRETS_FILE: str = ""
+    GOOGLE_OAUTH_CLIENT_SECRETS_JSON: str = ""
+    # Where we store tokens in dev (avoid committing this file).
+    # NOTE: `secrets/` is already gitignored in this repo.
+    GOOGLE_OAUTH_TOKEN_FILE: str = "secrets/google_token.json"
+    # Default calendar (\"primary\" is typical)
+    GOOGLE_CALENDAR_ID: str = "primary"
+
+    # Gmail (OAuth)
+    # Provide either a path to a client secrets JSON, or JSON inline.
+    GMAIL_OAUTH_CLIENT_SECRETS_FILE: str = ""
+    GMAIL_OAUTH_CLIENT_SECRETS_JSON: str = ""
+    # Where we store Gmail tokens
+    GMAIL_OAUTH_TOKEN_FILE: str = "secrets/gmail_token.json"
+
+    # Outlook (Microsoft Graph OAuth)
+    # Provide either a path to a client secrets JSON, or JSON inline.
+    # JSON should contain: client_id (or appId), client_secret (or password), tenant (optional, defaults to "common")
+    OUTLOOK_OAUTH_CLIENT_SECRETS_FILE: str = ""
+    OUTLOOK_OAUTH_CLIENT_SECRETS_JSON: str = ""
+    # Where we store Outlook tokens
+    OUTLOOK_OAUTH_TOKEN_FILE: str = "secrets/outlook_token.json"
+
+    # Database (Neon PostgreSQL)
+    DATABASE_URL: str = ""
 
     # CORS
     CORS_ORIGINS: List[str] = ["*"]
-    
-    # Database Connection Pooling
-    DB_POOL_SIZE: int = 5
-    DB_MAX_OVERFLOW: int = 10
-    DB_POOL_TIMEOUT: int = 30
+
+    # Auth (Godfather-only)
+    # If set, all /api/* endpoints require this token via:
+    # - Header: X-Godfather-Token: <token>
+    # - OR Authorization: Bearer <token>
+    GODFATHER_API_TOKEN: str = ""
 
 
 @lru_cache()
 def get_settings() -> Settings:
     """Get cached settings instance"""
     return Settings()
-

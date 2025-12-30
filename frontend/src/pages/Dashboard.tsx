@@ -1,128 +1,151 @@
-import React, { useState } from 'react';
-import { useWebSocket } from '../hooks/useWebSocket';
-import { CallList } from '../components/calls/CallList';
-import { CallDetail } from '../components/calls/CallDetail';
-import { InitiateCallModal } from '../components/calls/InitiateCallModal';
-import { useCallsStore } from '../store/callsStore';
-import { Button } from '../components/common/Button';
-import { cn } from '../utils/helpers';
+import { Link } from 'react-router-dom';
+import { TaskInput } from '@/components/tasks/TaskInput';
+import { TaskList } from '@/components/tasks/TaskList';
+import { CalendarStatus } from '@/components/calendar/CalendarStatus';
+import { CalendarEvents } from '@/components/calendar/CalendarEvents';
+import { Card, CardContent } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { useDailyPlan, useCostSummary, useTasks } from '@/lib/hooks';
+import { Loader2, Calendar, DollarSign, CheckCircle2, ArrowRight, Sparkles } from 'lucide-react';
 
-export const Dashboard: React.FC = () => {
-  useWebSocket(); // Initialize WebSocket connection
-  const { selectedCallId, selectCall } = useCallsStore();
-  const [isInitiateCallOpen, setIsInitiateCallOpen] = useState(false);
+export const Dashboard = () => {
+  const { data: dailyPlan } = useDailyPlan();
+  const { data: costSummary } = useCostSummary('day');
+  const { data: tasks = [] } = useTasks();
+  const pendingApprovals = tasks.filter((t) => t.status === 'awaiting_confirmation');
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  };
 
   return (
-    <div 
-      style={{
-        height: 'calc(100vh - 80px)',
-        display: 'flex',
-        flexDirection: 'row',
-        overflow: 'hidden',
-        backgroundColor: 'var(--ai-color-bg-primary)',
-      }}
-    >
-      {/* Call List - Left Panel */}
-      <div 
-        style={{
-          width: '420px',
-          flexShrink: 0,
-          borderRight: '0.5px solid var(--ai-color-border-heavy)',
-          backgroundColor: 'var(--ai-color-bg-primary)',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-      >
-        {/* Header with Initiate Call Button */}
-        <div
-          style={{
-            padding: 'var(--ai-spacing-8)',
-            borderBottom: '0.5px solid var(--ai-color-border-heavy)',
-          }}
-        >
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => setIsInitiateCallOpen(true)}
-            className="w-full"
-          >
-            + Initiate Call
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-white mb-2">Dashboard</h1>
+        <p className="text-white/80">
+          Your command center for tasks, calendar, and AI assistant
+        </p>
+      </div>
+
+      {/* Quick Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <Link to="/daily-plan">
+          <Card className="bg-slate-900/50 border-slate-700 hover:border-purple-500/50 transition-colors cursor-pointer">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-3">
+                <Calendar className="w-5 h-5 text-blue-400" />
+                <div className="flex-1">
+                  <p className="text-xs text-slate-400">Scheduled Today</p>
+                  <p className="text-xl font-bold text-white">
+                    {dailyPlan?.scheduled_tasks.length || 0}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+
+        {costSummary && (
+          <Link to="/cost">
+            <Card className="bg-slate-900/50 border-slate-700 hover:border-purple-500/50 transition-colors cursor-pointer">
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-3">
+                  <DollarSign className="w-5 h-5 text-emerald-400" />
+                  <div className="flex-1">
+                    <p className="text-xs text-slate-400">Today's Spend</p>
+                    <p className="text-xl font-bold text-white">
+                      {formatCurrency(costSummary.total_cost)}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+        )}
+
+        {pendingApprovals.length > 0 && (
+          <Link to="/approvals">
+            <Card className="bg-slate-900/50 border-slate-700 border-amber-500/30 hover:border-amber-500/50 transition-colors cursor-pointer">
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-3">
+                  <CheckCircle2 className="w-5 h-5 text-amber-400" />
+                  <div className="flex-1">
+                    <p className="text-xs text-slate-400">Pending Approvals</p>
+                    <p className="text-xl font-bold text-amber-400">
+                      {pendingApprovals.length}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+        )}
+
+        <Link to="/projects">
+          <Card className="bg-slate-900/50 border-slate-700 hover:border-purple-500/50 transition-colors cursor-pointer">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-3">
+                <Sparkles className="w-5 h-5 text-purple-400" />
+                <div className="flex-1">
+                  <p className="text-xs text-slate-400">Active Projects</p>
+                  <p className="text-xl font-bold text-white">—</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="mb-6 flex flex-wrap gap-2">
+        <Link to="/daily-plan">
+          <Button variant="secondary" size="sm">
+            View Today's Plan
+            <ArrowRight className="w-4 h-4 ml-2" />
           </Button>
+        </Link>
+        <Link to="/projects">
+          <Button variant="secondary" size="sm">
+            Manage Projects
+            <ArrowRight className="w-4 h-4 ml-2" />
+          </Button>
+        </Link>
+        {pendingApprovals.length > 0 && (
+          <Link to="/approvals">
+            <Button variant="primary" size="sm">
+              Review {pendingApprovals.length} Approval{pendingApprovals.length !== 1 ? 's' : ''}
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+          </Link>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <div className="lg:col-span-2">
+          <TaskInput />
         </div>
-        <div className="flex-1 overflow-hidden chatkit-scrollbar">
-          <CallList />
+        <div>
+          <CalendarStatus />
         </div>
       </div>
 
-      {/* Call Detail - Right Panel */}
-      <div 
-        style={{
-          flex: 1,
-          minWidth: 0,
-          backgroundColor: 'var(--ai-color-bg-primary)',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-        }}
-        className="chatkit-scrollbar"
-      >
-        <CallDetail callId={selectedCallId} />
-      </div>
-
-
-      {/* Empty State */}
-      {!selectedCallId && (
-        <div 
-          className="flex flex-1 items-center justify-center"
-          style={{ backgroundColor: 'var(--ai-color-bg-primary)' }}
-        >
-          <div className="text-center animate-fade-in" style={{ maxWidth: '28rem', padding: '0 var(--ai-spacing-12)' }}>
-            <div 
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '64px',
-                height: '64px',
-                backgroundColor: 'var(--ai-color-bg-tertiary)',
-                borderRadius: 'var(--ai-radius-full)',
-                marginBottom: 'var(--ai-spacing-8)',
-              }}
-            >
-              <svg style={{ width: '32px', height: '32px', color: 'var(--ai-color-icon-tertiary)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-              </svg>
-            </div>
-            <h3 style={{
-              fontSize: 'var(--ai-font-size-h3)',
-              fontWeight: 'var(--ai-font-weight-semibold)',
-              lineHeight: 'var(--ai-line-height-h3)',
-              letterSpacing: 'var(--ai-letter-spacing-h3)',
-              color: 'var(--ai-color-text-primary)',
-              marginBottom: 'var(--ai-spacing-4)',
-            }}>
-              Select a call to view details
-            </h3>
-            <p style={{
-              fontSize: 'var(--ai-font-size-body-small)',
-              lineHeight: 'var(--ai-line-height-body-small)',
-              color: 'var(--ai-color-text-tertiary)',
-            }}>
-              Choose a call from the list to see the transcript, QA metrics, and take actions
-            </p>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
+          <div className="mb-6">
+            <h2 className="text-2xl font-semibold text-white mb-4">Recent Tasks</h2>
+            <TaskList />
           </div>
         </div>
-      )}
-
-      {/* Initiate Call Modal */}
-      <InitiateCallModal
-        isOpen={isInitiateCallOpen}
-        onClose={() => setIsInitiateCallOpen(false)}
-        onSuccess={() => {
-          // Refresh calls list
-          window.location.reload();
-        }}
-      />
+        <div>
+          <CalendarEvents />
+        </div>
+      </div>
     </div>
   );
 };
+

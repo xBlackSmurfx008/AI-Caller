@@ -1,189 +1,130 @@
-import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { configAPI } from '../api/config';
-import { agentsAPI } from '../api/agents';
-import { useConfigStore } from '../store/configStore';
-import { BusinessConfigList } from '../components/config/BusinessConfigList';
-import { BusinessConfigForm } from '../components/config/BusinessConfigForm';
-import { KnowledgeBaseManager } from '../components/config/KnowledgeBaseManager';
-import { AgentManager } from '../components/config/AgentManager';
-import { PhoneNumberManager } from '../components/phone/PhoneNumberManager';
-import { SetupWizard } from '../components/setup/SetupWizard';
-import { Modal } from '../components/common/Modal';
-import { Button } from '../components/common/Button';
-import { cn } from '../utils/helpers';
-import type { BusinessConfig } from '../types/config';
-import toast from 'react-hot-toast';
+import { useState } from 'react';
+import { GodfatherSettings } from '@/components/settings/GodfatherSettings';
+import { EmailSettings } from '@/components/settings/EmailSettings';
+import { CalendarSettings } from '@/components/settings/CalendarSettings';
+import { TwilioSettings } from '@/components/settings/TwilioSettings';
+import { WorkPreferencesSettings } from '@/components/settings/WorkPreferences';
+import { BudgetSettings } from '@/components/settings/BudgetSettings';
+import { AIAutonomySettings } from '@/components/settings/AIAutonomySettings';
+import { cn } from '@/lib/utils';
+import { 
+  Settings2, 
+  Link2, 
+  DollarSign, 
+  Clock, 
+  User,
+  Calendar,
+  Mail,
+  Phone
+} from 'lucide-react';
 
-const TABS = [
-  { id: 'business', label: 'Business Configs' },
-  { id: 'knowledge', label: 'Knowledge Base' },
-  { id: 'agents', label: 'Agents' },
-  { id: 'phone-numbers', label: 'Phone Numbers' },
+type SettingsTab = 'integrations' | 'preferences' | 'account';
+
+const tabs = [
+  { id: 'integrations' as const, label: 'Integrations', icon: Link2, description: 'Connect services' },
+  { id: 'preferences' as const, label: 'Preferences', icon: Settings2, description: 'Work & AI settings' },
+  { id: 'account' as const, label: 'Account', icon: User, description: 'Your profile' },
 ];
 
-export const Settings: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('business');
-  const [isConfigFormOpen, setIsConfigFormOpen] = useState(false);
-  const [isSetupWizardOpen, setIsSetupWizardOpen] = useState(false);
-  const [editingConfig, setEditingConfig] = useState<BusinessConfig | null>(null);
-  const { setBusinessConfigs, setAgents } = useConfigStore();
-
-  const { data: configs, refetch: refetchConfigs } = useQuery({
-    queryKey: ['business-configs'],
-    queryFn: () => configAPI.listBusinessConfigs(),
-    onSuccess: (data) => {
-      setBusinessConfigs(data);
-    },
-  });
-
-  const { refetch: refetchAgents } = useQuery({
-    queryKey: ['agents'],
-    queryFn: () => agentsAPI.list(),
-    onSuccess: (data) => {
-      setAgents(data);
-    },
-  });
-
-  const handleCreateConfig = () => {
-    console.log('handleCreateConfig called');
-    // If no configs exist, open setup wizard; otherwise open config form
-    if (!configs || configs.length === 0) {
-      setIsSetupWizardOpen(true);
-    } else {
-      setEditingConfig(null);
-      setIsConfigFormOpen(true);
-    }
-  };
-
-  const handleSetupWizardClose = () => {
-    setIsSetupWizardOpen(false);
-    // Refetch configs after setup wizard closes
-    refetchConfigs();
-  };
-
-  const handleSetupWizardComplete = () => {
-    setIsSetupWizardOpen(false);
-    // Refetch configs after setup wizard completes
-    refetchConfigs();
-    toast.success('Setup completed successfully!');
-  };
-
-  const handleEditConfig = (config: BusinessConfig) => {
-    setEditingConfig(config);
-    setIsConfigFormOpen(true);
-  };
-
-  const handleConfigFormSuccess = () => {
-    refetchConfigs();
-  };
-
-  const handleConfigFormClose = () => {
-    setIsConfigFormOpen(false);
-    setEditingConfig(null);
-  };
-
-  const handleDeleteConfig = async (id: string) => {
-    try {
-      await configAPI.deleteBusinessConfig(id);
-      toast.success('Configuration deleted');
-      refetchConfigs();
-    } catch (error) {
-      toast.error('Failed to delete configuration');
-    }
-  };
+export const Settings = () => {
+  const [activeTab, setActiveTab] = useState<SettingsTab>('integrations');
 
   return (
-    <div className="space-y-5 p-6">
-      <div>
-        <h1 className="text-xl font-semibold text-gray-800">Settings</h1>
-        <p className="mt-0.5 text-sm text-gray-500">
-          Manage your business configurations, agents, and knowledge base
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-white mb-2">Settings</h1>
+        <p className="text-slate-400">
+          Configure your AI assistant, connect services, and manage preferences
         </p>
       </div>
 
-      {/* Tabs */}
-      <div style={{ borderBottom: '0.5px solid var(--ai-color-border-heavy)' }}>
-        <nav style={{ display: 'flex', gap: 'var(--ai-spacing-12)' }}>
-          {TABS.map((tab) => (
+      {/* Tab Navigation */}
+      <div className="flex gap-2 mb-8 border-b border-slate-700 pb-4 overflow-x-auto">
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          return (
             <button
               key={tab.id}
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setActiveTab(tab.id);
-              }}
-              style={{
-                padding: 'var(--ai-spacing-6) var(--ai-spacing-4)',
-                borderBottom: `2px solid ${activeTab === tab.id ? 'var(--ai-color-brand-primary)' : 'transparent'}`,
-                fontSize: 'var(--ai-font-size-body-small)',
-                fontWeight: 'var(--ai-font-weight-medium)',
-                color: activeTab === tab.id ? 'var(--ai-color-text-primary)' : 'var(--ai-color-text-secondary)',
-                backgroundColor: 'transparent',
-                borderTop: 'none',
-                borderLeft: 'none',
-                borderRight: 'none',
-                cursor: 'pointer',
-                transition: 'border-color 0.15s ease, color 0.15s ease',
-              }}
-              onMouseEnter={(e) => {
-                if (activeTab !== tab.id) {
-                  e.currentTarget.style.color = 'var(--ai-color-text-primary)';
-                  e.currentTarget.style.borderBottomColor = 'var(--ai-color-border-default)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (activeTab !== tab.id) {
-                  e.currentTarget.style.color = 'var(--ai-color-text-secondary)';
-                  e.currentTarget.style.borderBottomColor = 'transparent';
-                }
-              }}
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                'flex items-center gap-2 px-4 py-3 rounded-lg transition-all whitespace-nowrap',
+                activeTab === tab.id
+                  ? 'bg-purple-600 text-white'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              )}
             >
-              {tab.label}
+              <Icon className="w-5 h-5" />
+              <div className="text-left">
+                <div className="font-semibold">{tab.label}</div>
+                <div className="text-xs opacity-75">{tab.description}</div>
+              </div>
             </button>
-          ))}
-        </nav>
+          );
+        })}
       </div>
 
       {/* Tab Content */}
-      <div>
-        {activeTab === 'business' && (
-          <BusinessConfigList
-            configs={configs || []}
-            onEdit={handleEditConfig}
-            onDelete={handleDeleteConfig}
-            onCreate={handleCreateConfig}
-          />
+      <div className="space-y-8">
+        {activeTab === 'integrations' && (
+          <>
+            {/* Quick Status Overview */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+              <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-500/20 rounded-lg">
+                    <Calendar className="w-5 h-5 text-blue-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-white">Calendar</h3>
+                    <p className="text-xs text-slate-400">Schedule & events</p>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-red-500/20 rounded-lg">
+                    <Mail className="w-5 h-5 text-red-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-white">Email</h3>
+                    <p className="text-xs text-slate-400">Gmail & Outlook</p>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-green-500/20 rounded-lg">
+                    <Phone className="w-5 h-5 text-green-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-white">Messaging</h3>
+                    <p className="text-xs text-slate-400">SMS & WhatsApp</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <CalendarSettings />
+            <EmailSettings />
+            <TwilioSettings />
+          </>
         )}
 
-        {activeTab === 'knowledge' && <KnowledgeBaseManager />}
+        {activeTab === 'preferences' && (
+          <>
+            <AIAutonomySettings />
+            <WorkPreferencesSettings />
+            <BudgetSettings />
+          </>
+        )}
 
-        {activeTab === 'agents' && <AgentManager />}
-
-        {activeTab === 'phone-numbers' && <PhoneNumberManager />}
+        {activeTab === 'account' && (
+          <>
+            <GodfatherSettings />
+          </>
+        )}
       </div>
-
-      {/* Business Config Form Modal */}
-      <BusinessConfigForm
-        isOpen={isConfigFormOpen}
-        onClose={handleConfigFormClose}
-        editingConfig={editingConfig}
-        onSuccess={handleConfigFormSuccess}
-      />
-
-      {/* Setup Wizard Modal */}
-      <Modal
-        isOpen={isSetupWizardOpen}
-        onClose={handleSetupWizardClose}
-        title="Initial Setup - Configure Your System"
-        size="large"
-      >
-        <SetupWizard 
-          onComplete={handleSetupWizardComplete}
-          onClose={handleSetupWizardClose}
-        />
-      </Modal>
     </div>
   );
 };
+

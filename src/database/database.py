@@ -1,63 +1,57 @@
-"""Database connection and session management"""
+"""Database connection and session management.
 
-from urllib.parse import urlparse
+Notes on Postgres (Neon):
+- On Python 3.14, `psycopg2-binary` wheels may not be available.
+- To keep the app runnable, we *gracefully fall back to SQLite* if Postgres driver isn't installed.
+"""
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.pool import QueuePool, NullPool
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from typing import Generator
 
-from src.database.models import Base
 from src.utils.config import get_settings
-from src.utils.logging import get_logger
 
-logger = get_logger(__name__)
 settings = get_settings()
 
-# Create engine with connection pooling for production
-# Use QueuePool for better performance and connection reuse
-pool_size = getattr(settings, 'DB_POOL_SIZE', 5)
-max_overflow = getattr(settings, 'DB_MAX_OVERFLOW', 10)
-pool_timeout = getattr(settings, 'DB_POOL_TIMEOUT', 30)
-
-db_url = settings.DATABASE_URL
-is_sqlite = urlparse(db_url).scheme == "sqlite"
-
-# SQLite needs different pooling/connection args (especially in serverless / multithreaded contexts)
-engine_kwargs = {
-    "echo": settings.APP_DEBUG,
-    "future": True,
-}
-
-if is_sqlite:
-    engine_kwargs.update(
-        {
-            "poolclass": NullPool,
-            "connect_args": {"check_same_thread": False},
-        }
+# Create engine - use DATABASE_URL if provided, otherwise use SQLite for local dev
+def _sqlite_engine():
+    return create_engine(
+        "sqlite:///./ai_caller.db",
+        connect_args={"check_same_thread": False},
     )
+
+
+engine = None
+if settings.DATABASE_URL:
+    try:
+        engine = create_engine(
+            settings.DATABASE_URL,
+            pool_pre_ping=True,  # Verify connections before using
+            pool_size=5,
+            max_overflow=10,
+        )
+    except Exception as e:
+        # If Postgres driver isn't installed / URL invalid...
+        import logging
+        logger = logging.getLogger(__name__)
+
+        # CRITICAL: In production, we must not silently fall back to SQLite as it would cause data loss in serverless envs.
+        if settings.APP_ENV.lower() == "production":
+            logger.error(f"DATABASE_URL configured but DB connection failed in PRODUCTION. Error: {e}")
+            raise e
+
+        logger.warning(f"DATABASE_URL configured but DB driver not available/connection failed; using SQLite. Error: {e}")
+        engine = _sqlite_engine()
 else:
-    engine_kwargs.update(
-        {
-            "poolclass": QueuePool,
-            "pool_size": pool_size,
-            "max_overflow": max_overflow,
-            "pool_timeout": pool_timeout,
-            "pool_pre_ping": True,  # Verify connections before using
-        }
-    )
+    engine = _sqlite_engine()
 
-engine = create_engine(db_url, **engine_kwargs)
-
-# Create session factory
-SessionLocal = sessionmaker(
-    autocommit=False,
-    autoflush=False,
-    bind=engine,
-)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
 
 
-def get_db() -> Session:
-    """Dependency for getting database session"""
+def get_db() -> Generator:
+    """Get database session"""
     db = SessionLocal()
     try:
         yield db
@@ -65,14 +59,12 @@ def get_db() -> Session:
         db.close()
 
 
-def init_db() -> None:
-    """Initialize database (create tables)"""
-    Base.metadata.create_all(bind=engine)
-    logger.info("Database initialized")
-
-
-def drop_db() -> None:
-    """Drop all database tables"""
-    Base.metadata.drop_all(bind=engine)
-    logger.info("Database dropped")
+def init_db():
+    """Initialize database tables"""
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        # Log but don't fail - tables may already exist
+        import logging
+        logging.getLogger(__name__).warning(f"Database initialization warning: {e}")
 
