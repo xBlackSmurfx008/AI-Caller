@@ -61,7 +61,13 @@ if settings.DATABASE_URL:
             if is_postgres and force_ipv4 and parsed.host:
                 ipv4 = _resolve_ipv4(parsed.host)
                 if ipv4:
-                    connect_args["hostaddr"] = ipv4
+                    # Prefer rewriting the URL host to an IPv4 literal. This reliably bypasses
+                    # runtimes where IPv6 connect fails and hostaddr is ignored.
+                    try:
+                        url = str(parsed.set(host=ipv4))
+                    except Exception:
+                        # Fallback: best-effort string replace
+                        url = url.replace(parsed.host, ipv4)
         except Exception:
             # If URL parsing fails, fall back to a simple heuristic.
             if "sslmode=" not in url and (url.startswith("postgres") or url.startswith("postgresql")):
