@@ -5,12 +5,14 @@ Notes on Postgres (Neon):
 - To keep the app runnable, we *gracefully fall back to SQLite* if Postgres driver isn't installed.
 """
 
+import os
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
 from typing import Generator
 
 from src.utils.config import get_settings
+from src.utils.runtime import is_serverless
 
 settings = get_settings()
 
@@ -25,12 +27,37 @@ def _sqlite_engine():
 engine = None
 if settings.DATABASE_URL:
     try:
-        engine = create_engine(
-            settings.DATABASE_URL,
-            pool_pre_ping=True,  # Verify connections before using
-            pool_size=5,
-            max_overflow=10,
-        )
+        # Postgres/Supabase compatibility:
+        # - Supabase commonly requires SSL (`sslmode=require` for psycopg2).
+        # - Serverless runtimes should prefer NullPool (no long-lived pooled conns).
+        from sqlalchemy.engine.url import make_url
+        from sqlalchemy.pool import NullPool
+
+        url = settings.DATABASE_URL
+        connect_args = {}
+        try:
+            parsed = make_url(url)
+            is_postgres = parsed.drivername.startswith("postgres")
+            if is_postgres and "sslmode" not in (parsed.query or {}):
+                connect_args["sslmode"] = "require"
+        except Exception:
+            # If URL parsing fails, fall back to a simple heuristic.
+            if "sslmode=" not in url and (url.startswith("postgres") or url.startswith("postgresql")):
+                connect_args["sslmode"] = "require"
+
+        engine_kwargs = {
+            "pool_pre_ping": True,  # Verify connections before using
+        }
+        if connect_args:
+            engine_kwargs["connect_args"] = connect_args
+
+        if is_serverless():
+            engine_kwargs["poolclass"] = NullPool
+        else:
+            engine_kwargs["pool_size"] = int(os.getenv("DB_POOL_SIZE") or "5")
+            engine_kwargs["max_overflow"] = int(os.getenv("DB_MAX_OVERFLOW") or "10")
+
+        engine = create_engine(url, **engine_kwargs)
     except Exception as e:
         # If Postgres driver isn't installed / URL invalid...
         import logging

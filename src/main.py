@@ -30,6 +30,7 @@ from src.utils.config import get_settings
 from src.integrations.manager import get_integration_manager
 from src.utils.logging import setup_logging
 from src.security.auth import require_godfather, is_auth_exempt
+from src.utils.runtime import allow_background_tasks
 from src.utils.rate_limit import limiter
 from slowapi.errors import RateLimitExceeded
 from src.calendar.reminders import ReminderEngine
@@ -72,8 +73,9 @@ except Exception as e:
 
 # Start background worker for memory summaries
 try:
-    from src.memory.background_tasks import start_background_worker
-    start_background_worker()
+    if allow_background_tasks():
+        from src.memory.background_tasks import start_background_worker
+        start_background_worker()
 except Exception as e:
     import logging
     logging.getLogger(__name__).warning(f"Background worker initialization warning: {e}")
@@ -158,6 +160,12 @@ from src.messaging.background_tasks import _messaging_background_tasks
 async def _start_background_tasks():
     """Start background tasks for reminders and commitment updates"""
     import asyncio
+
+    # Serverless platforms (like Vercel) must not run infinite loops.
+    if not allow_background_tasks():
+        import logging
+        logging.getLogger(__name__).info("background_tasks_disabled_for_runtime")
+        return
     
     async def _reminder_loop():
         while True:

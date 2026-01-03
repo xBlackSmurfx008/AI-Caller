@@ -13,6 +13,13 @@ from fastapi.responses import JSONResponse
 # Add project root to import path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Runtime helpers
+try:
+    from src.utils.runtime import allow_background_tasks
+except Exception:
+    def allow_background_tasks() -> bool:  # type: ignore
+        return False
+
 # Initialize app
 app = FastAPI(
     title="AI Voice Assistant (Vercel)",
@@ -28,12 +35,13 @@ try:
 except Exception as e:
     print(f"Warning: Failed to setup logging: {e}")
 
-# Start background worker for memory summaries
-try:
-    from src.memory.background_tasks import start_background_worker
-    start_background_worker()
-except Exception as e:
-    print(f"Warning: Failed to start background worker: {e}")
+# Background workers (threads / infinite loops) are unsafe on Vercel.
+if allow_background_tasks():
+    try:
+        from src.memory.background_tasks import start_background_worker
+        start_background_worker()
+    except Exception as e:
+        print(f"Warning: Failed to start background worker: {e}")
 
 try:
     from src.utils.config import get_settings
@@ -78,6 +86,26 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Godfather-only auth middleware (align with src/main.py)
+try:
+    from fastapi import HTTPException
+    from src.security.auth import require_godfather, is_auth_exempt
+
+    @app.middleware("http")
+    async def _godfather_auth_middleware(request: Request, call_next):
+        # Never block Twilio webhooks
+        if request.url.path.startswith("/webhooks/twilio"):
+            return await call_next(request)
+        # Only protect API routes
+        if request.url.path.startswith("/api") and not is_auth_exempt(request.url.path):
+            try:
+                require_godfather(request)
+            except HTTPException as e:
+                return JSONResponse(status_code=e.status_code, content={"detail": e.detail})
+        return await call_next(request)
+except Exception as e:
+    print(f"Warning: Failed to install auth middleware: {e}")
 
 # Include all routers
 try:
@@ -137,6 +165,13 @@ except Exception as e:
     traceback.print_exc()
 
 try:
+    from src.api.routes.commitments import router as commitments_router
+    app.include_router(commitments_router, prefix="/api/commitments", tags=["commitments"])
+except Exception as e:
+    print(f"Warning: Failed to load commitments router: {e}")
+    traceback.print_exc()
+
+try:
     from src.api.routes.messaging import router as messaging_router
     app.include_router(messaging_router, prefix="/api/messaging", tags=["messaging"])
 except Exception as e:
@@ -144,10 +179,80 @@ except Exception as e:
     traceback.print_exc()
 
 try:
+    from src.api.routes.dashboard import router as dashboard_router
+    app.include_router(dashboard_router, prefix="/api/dashboard", tags=["dashboard"])
+except Exception as e:
+    print(f"Warning: Failed to load dashboard router: {e}")
+    traceback.print_exc()
+
+try:
+    from src.api.routes.project_tasks import router as project_tasks_router
+    app.include_router(project_tasks_router, prefix="/api/project-tasks", tags=["project-tasks"])
+except Exception as e:
+    print(f"Warning: Failed to load project-tasks router: {e}")
+    traceback.print_exc()
+
+try:
+    from src.api.routes.scheduling import router as scheduling_router
+    app.include_router(scheduling_router, prefix="/api/scheduling", tags=["scheduling"])
+except Exception as e:
+    print(f"Warning: Failed to load scheduling router: {e}")
+    traceback.print_exc()
+
+try:
+    from src.api.routes.cost import router as cost_router
+    app.include_router(cost_router, prefix="/api/cost", tags=["cost"])
+except Exception as e:
+    print(f"Warning: Failed to load cost router: {e}")
+    traceback.print_exc()
+
+try:
     from src.api.routes.preferences import router as preferences_router
     app.include_router(preferences_router, prefix="/api/preferences", tags=["preferences"])
 except Exception as e:
     print(f"Warning: Failed to load preferences router: {e}")
+    traceback.print_exc()
+
+try:
+    from src.api.routes.gmail import router as gmail_router
+    app.include_router(gmail_router, prefix="/api/gmail", tags=["gmail"])
+except Exception as e:
+    print(f"Warning: Failed to load gmail router: {e}")
+    traceback.print_exc()
+
+try:
+    from src.api.routes.outlook import router as outlook_router
+    app.include_router(outlook_router, prefix="/api/outlook", tags=["outlook"])
+except Exception as e:
+    print(f"Warning: Failed to load outlook router: {e}")
+    traceback.print_exc()
+
+try:
+    from src.api.routes.audio import router as audio_router
+    app.include_router(audio_router, prefix="/api/audio", tags=["audio"])
+except Exception as e:
+    print(f"Warning: Failed to load audio router: {e}")
+    traceback.print_exc()
+
+try:
+    from src.api.routes.pec import router as pec_router
+    app.include_router(pec_router, prefix="/api", tags=["pec"])
+except Exception as e:
+    print(f"Warning: Failed to load pec router: {e}")
+    traceback.print_exc()
+
+try:
+    from src.api.routes.relationship_ops import router as relationship_ops_router
+    app.include_router(relationship_ops_router, prefix="/api/relationship-ops", tags=["relationship-ops"])
+except Exception as e:
+    print(f"Warning: Failed to load relationship-ops router: {e}")
+    traceback.print_exc()
+
+try:
+    from src.api.routes.cron import router as cron_router
+    app.include_router(cron_router, prefix="/api", tags=["cron"])
+except Exception as e:
+    print(f"Warning: Failed to load cron router: {e}")
     traceback.print_exc()
 
 try:

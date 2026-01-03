@@ -51,10 +51,13 @@ def is_auth_exempt(path: str) -> bool:
     """
     Exemptions:
     - /api/health* (health endpoints)
+    - /api/cron* (Vercel cron tick endpoint; endpoint itself enforces origin/token)
     - /api/*/oauth/* (OAuth callbacks and starts)
     - /docs, /redoc, /openapi.json (docs)
     """
     if path.startswith("/api/health"):
+        return True
+    if path.startswith("/api/cron"):
         return True
     if path.startswith("/api") and "/oauth/" in path:
         return True
