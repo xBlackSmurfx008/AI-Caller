@@ -7,7 +7,8 @@ import os
 
 def is_vercel() -> bool:
     """True when running inside Vercel runtime."""
-    return bool(os.getenv("VERCEL")) or bool(os.getenv("VERCEL_ENV"))
+    # Vercel commonly sets at least one of these.
+    return bool(os.getenv("VERCEL")) or bool(os.getenv("VERCEL_ENV")) or bool(os.getenv("VERCEL_REGION")) or bool(os.getenv("NOW_REGION"))
 
 
 def is_serverless() -> bool:
