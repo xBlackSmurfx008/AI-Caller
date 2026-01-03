@@ -5,7 +5,8 @@ This repo can deploy to Vercel as:
 - **Backend**: Python serverless function (`api/index.py`)
 
 Because serverless does not support long-running background loops reliably, this repo also includes
-`GET /api/cron/tick` and a Vercel Cron job that calls it every 10 minutes.
+`GET /api/cron/tick` and a Vercel Cron job that calls it daily (Hobby limitation).
+If you upgrade to Vercel Pro, you can run this more frequently (e.g. every 10 minutes).
 
 ### 1) Create a Supabase project + database URL
 
@@ -73,7 +74,7 @@ Set your Twilio phone number webhooks to:
 ### 7) Confirm cron is running
 
 Vercel Cron calls:
-- `GET /api/cron/tick` every 10 minutes
+- `GET /api/cron/tick` daily (Hobby). For higher frequency, upgrade to Pro.
 
 This performs serverless-safe maintenance:
 - reminder checks (best-effort)
