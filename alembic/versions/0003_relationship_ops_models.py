@@ -1,7 +1,7 @@
 """Add relationship ops models for Master Networker CRM
 
 Revision ID: 0003_relationship_ops
-Revises: 0002_add_pec_table
+Revises: 0002
 Create Date: 2024-12-29
 
 """
@@ -11,7 +11,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = '0003_relationship_ops'
-down_revision = '0002_add_pec_table'
+down_revision = '0002'
 branch_labels = None
 depends_on = None
 
