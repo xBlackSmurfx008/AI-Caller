@@ -6,6 +6,7 @@ Notes on Postgres (Neon):
 """
 
 import os
+import socket
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -15,6 +16,20 @@ from src.utils.config import get_settings
 from src.utils.runtime import is_serverless
 
 settings = get_settings()
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _resolve_ipv4(hostname: str) -> str | None:
+    """Resolve hostname to an IPv4 address (best-effort)."""
+    try:
+        infos = socket.getaddrinfo(hostname, None, socket.AF_INET, socket.SOCK_STREAM)
+        if infos:
+            return infos[0][4][0]
+    except Exception:
+        return None
+    return None
 
 # Create engine - use DATABASE_URL if provided, otherwise use SQLite for local dev
 def _sqlite_engine():
@@ -40,6 +55,13 @@ if settings.DATABASE_URL:
             is_postgres = parsed.drivername.startswith("postgres")
             if is_postgres and "sslmode" not in (parsed.query or {}):
                 connect_args["sslmode"] = "require"
+
+            # Vercel/serverless: force IPv4 when possible to avoid IPv6-only connect failures.
+            force_ipv4 = is_serverless() and (os.getenv("DB_FORCE_IPV4", "1").strip().lower() not in {"0", "false", "no"})
+            if is_postgres and force_ipv4 and parsed.host:
+                ipv4 = _resolve_ipv4(parsed.host)
+                if ipv4:
+                    connect_args["hostaddr"] = ipv4
         except Exception:
             # If URL parsing fails, fall back to a simple heuristic.
             if "sslmode=" not in url and (url.startswith("postgres") or url.startswith("postgresql")):
