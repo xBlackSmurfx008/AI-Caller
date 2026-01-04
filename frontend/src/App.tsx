@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
@@ -64,7 +64,8 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
 function OnboardingGuard({ children }: { children: React.ReactNode }) {
   const location = useLocation();
-  const onboardingCompleted = localStorage.getItem('onboarding_completed') === 'true';
+  // Use prefixed storage key for iOS WKWebView compatibility
+  const onboardingCompleted = localStorage.getItem('aiadmin_onboarding_completed') === 'true';
   
   if (!onboardingCompleted && location.pathname !== '/onboarding' && location.pathname !== '/oauth/callback') {
     return <Navigate to="/onboarding" replace />;
@@ -176,9 +177,9 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <BrowserRouter>
+        <HashRouter>
           <AppRoutes />
-        </BrowserRouter>
+        </HashRouter>
       </AuthProvider>
     </QueryClientProvider>
   );

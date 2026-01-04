@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/lib/AuthContext';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
@@ -8,14 +9,33 @@ import { Loader2, AlertCircle, Sparkles } from 'lucide-react';
 // Simple auth - credentials are verified client-side for this deployment
 const VALID_EMAIL = 'ceo@digiwealth.io';
 const VALID_PASSWORD = '062210';
-const AUTH_TOKEN = 'ai-caller-auth-2025-secure';
 
 export const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [shouldNavigate, setShouldNavigate] = useState(false);
   const navigate = useNavigate();
+  const { signIn, isAuthenticated } = useAuth();
+
+  // Use effect to handle navigation after auth state is confirmed
+  // This is more reliable on iOS WKWebView than navigating in the submit handler
+  useEffect(() => {
+    if (shouldNavigate && isAuthenticated) {
+      // Use requestAnimationFrame to ensure DOM is ready before navigation
+      requestAnimationFrame(() => {
+        navigate('/', { replace: true });
+      });
+    }
+  }, [shouldNavigate, isAuthenticated, navigate]);
+
+  // If already authenticated, redirect immediately
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,15 +43,13 @@ export const Login = () => {
     setIsLoading(true);
 
     // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise(resolve => setTimeout(resolve, 300));
 
     if (email.toLowerCase() === VALID_EMAIL && password === VALID_PASSWORD) {
-      // Set auth in localStorage
-      localStorage.setItem('isAuthenticated', 'true');
-      localStorage.setItem('auth_token', AUTH_TOKEN);
-      localStorage.setItem('user_email', email);
-      // Full page reload to pick up new auth state
-      window.location.href = '/';
+      // Update auth state - this will trigger the useEffect above
+      signIn(email);
+      // Signal that we should navigate once auth state is confirmed
+      setShouldNavigate(true);
       return;
     } else {
       setError('Invalid email or password');

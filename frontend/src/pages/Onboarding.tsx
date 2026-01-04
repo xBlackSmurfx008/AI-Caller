@@ -79,8 +79,9 @@ export const Onboarding = () => {
   const { data: outlookStatus } = useOutlookStatus();
 
   // Check if user has already completed onboarding
+  // Use prefixed storage key for iOS WKWebView compatibility
   useEffect(() => {
-    const onboardingCompleted = localStorage.getItem('onboarding_completed');
+    const onboardingCompleted = localStorage.getItem('aiadmin_onboarding_completed');
     if (onboardingCompleted === 'true') {
       navigate('/');
     }
@@ -123,7 +124,7 @@ export const Onboarding = () => {
   };
 
   const handleComplete = () => {
-    localStorage.setItem('onboarding_completed', 'true');
+    localStorage.setItem('aiadmin_onboarding_completed', 'true');
     toast.success('Welcome! You\'re all set up.');
     navigate('/');
   };

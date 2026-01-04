@@ -7,8 +7,10 @@ const config: CapacitorConfig = {
   ios: {
     contentInset: 'automatic',
     preferredContentMode: 'mobile',
-    scheme: 'AI Admin',
-    limitsNavigationsToAppBoundDomains: true,
+    scheme: 'aiadmin',
+    // IMPORTANT: limitsNavigationsToAppBoundDomains was removed because it requires
+    // WKAppBoundDomains in Info.plist and breaks localStorage in WKWebView.
+    // This was causing blank page after login.
   },
   plugins: {
     SplashScreen: {
