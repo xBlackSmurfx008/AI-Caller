@@ -80,52 +80,54 @@ function AppContent() {
   useGodfatherSettings();
 
   return (
-    <div className="min-h-screen pb-16 md:pb-0">
+    <div className="min-h-screen pb-16 md:pb-0 flex flex-col overflow-hidden">
       <OnboardingGuard>
         <Navbar />
-        <Routes>
-          {/* Core Routes - Consolidated */}
-          <Route path="/" element={<Today />} />
-          <Route path="/onboarding" element={<Onboarding />} />
-          
-          {/* People (Contacts) */}
-          <Route path="/contacts" element={<Contacts />} />
-          <Route path="/contacts/:id" element={<ContactDetail />} />
-          
-          {/* Messaging */}
-          <Route path="/messaging" element={<Messaging />} />
-          <Route path="/messages" element={<Messages />} />
-          
-          {/* Projects & Tasks */}
-          <Route path="/projects" element={<Projects />} />
-          <Route path="/projects/:id" element={<ProjectDetail />} />
-          
-          {/* Approvals */}
-          <Route path="/approvals" element={<Approvals />} />
-          
-          {/* Settings Hub - includes admin features */}
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/settings/calendar" element={<Calendar />} />
-          <Route path="/settings/tasks" element={<Tasks />} />
-          <Route path="/settings/trusted" element={<TrustedList />} />
-          <Route path="/settings/costs" element={<CostMonitoring />} />
-          <Route path="/settings/audit" element={<AuditLog />} />
-          
-          {/* Legacy routes - redirect to new structure */}
-          <Route path="/dashboard" element={<Navigate to="/" replace />} />
-          <Route path="/command-center" element={<Navigate to="/" replace />} />
-          <Route path="/daily-plan" element={<Navigate to="/" replace />} />
-          <Route path="/calendar" element={<Navigate to="/settings/calendar" replace />} />
-          <Route path="/tasks" element={<Navigate to="/settings/tasks" replace />} />
-          <Route path="/trusted-list" element={<Navigate to="/settings/trusted" replace />} />
-          <Route path="/cost" element={<Navigate to="/settings/costs" replace />} />
-          <Route path="/audit-log" element={<Navigate to="/settings/audit" replace />} />
-          
-          {/* OAuth & Relationship Ops */}
-          <Route path="/oauth/callback" element={<OAuthCallback />} />
-          <Route path="/relationship-ops/runs" element={<RelationshipOpsRunsList />} />
-          <Route path="/relationship-ops/runs/:runId" element={<RelationshipOpsRun />} />
-        </Routes>
+        <div className="flex-1 overflow-y-auto">
+          <Routes>
+            {/* Core Routes - Consolidated */}
+            <Route path="/" element={<Today />} />
+            <Route path="/onboarding" element={<Onboarding />} />
+            
+            {/* People (Contacts) */}
+            <Route path="/contacts" element={<Contacts />} />
+            <Route path="/contacts/:id" element={<ContactDetail />} />
+            
+            {/* Messaging */}
+            <Route path="/messaging" element={<Messaging />} />
+            <Route path="/messages" element={<Messages />} />
+            
+            {/* Projects & Tasks */}
+            <Route path="/projects" element={<Projects />} />
+            <Route path="/projects/:id" element={<ProjectDetail />} />
+            
+            {/* Approvals */}
+            <Route path="/approvals" element={<Approvals />} />
+            
+            {/* Settings Hub - includes admin features */}
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/settings/calendar" element={<Calendar />} />
+            <Route path="/settings/tasks" element={<Tasks />} />
+            <Route path="/settings/trusted" element={<TrustedList />} />
+            <Route path="/settings/costs" element={<CostMonitoring />} />
+            <Route path="/settings/audit" element={<AuditLog />} />
+            
+            {/* Legacy routes - redirect to new structure */}
+            <Route path="/dashboard" element={<Navigate to="/" replace />} />
+            <Route path="/command-center" element={<Navigate to="/" replace />} />
+            <Route path="/daily-plan" element={<Navigate to="/" replace />} />
+            <Route path="/calendar" element={<Navigate to="/settings/calendar" replace />} />
+            <Route path="/tasks" element={<Navigate to="/settings/tasks" replace />} />
+            <Route path="/trusted-list" element={<Navigate to="/settings/trusted" replace />} />
+            <Route path="/cost" element={<Navigate to="/settings/costs" replace />} />
+            <Route path="/audit-log" element={<Navigate to="/settings/audit" replace />} />
+            
+            {/* OAuth & Relationship Ops */}
+            <Route path="/oauth/callback" element={<OAuthCallback />} />
+            <Route path="/relationship-ops/runs" element={<RelationshipOpsRunsList />} />
+            <Route path="/relationship-ops/runs/:runId" element={<RelationshipOpsRun />} />
+          </Routes>
+        </div>
         <BottomNav />
       </OnboardingGuard>
       <Toaster

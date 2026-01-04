@@ -83,7 +83,7 @@ export const Onboarding = () => {
   useEffect(() => {
     const onboardingCompleted = localStorage.getItem('aiadmin_onboarding_completed');
     if (onboardingCompleted === 'true') {
-      navigate('/');
+      navigate('/', { replace: true });
     }
   }, [navigate]);
 
@@ -126,7 +126,7 @@ export const Onboarding = () => {
   const handleComplete = () => {
     localStorage.setItem('aiadmin_onboarding_completed', 'true');
     toast.success('Welcome! You\'re all set up.');
-    navigate('/');
+    navigate('/', { replace: true });
   };
 
   const handleConnectCalendar = async () => {
@@ -160,8 +160,8 @@ export const Onboarding = () => {
   const progress = ((currentStep + 1) / steps.length) * 100;
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-8">
-      <div className="max-w-2xl w-full">
+    <div className="min-h-screen flex items-start justify-center px-4 py-8 pb-28 overflow-hidden">
+      <div className="max-w-2xl w-full space-y-6">
         {/* Progress Bar */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-2">
@@ -179,7 +179,7 @@ export const Onboarding = () => {
         </div>
 
         {/* Step Card */}
-        <Card className="bg-slate-900/50 border-slate-700">
+        <Card className="bg-slate-900/50 border-slate-700 max-h-[75vh] overflow-y-auto">
           <CardHeader>
             <div className="flex items-center gap-4 mb-4">
               <div className={`p-3 rounded-lg ${
