@@ -40,7 +40,9 @@ export const Today = () => {
   // Core data
   const { data: plan, isLoading: planLoading, refetch: refetchPlan } = useDailyPlan();
   const { data: costSummary } = useCostSummary('day');
-  const { data: tasks = [] } = useTasks();
+  // Robust guard: ensure tasks is always an array to avoid runtime filter errors
+  const { data: rawTasks } = useTasks();
+  const tasks = Array.isArray(rawTasks) ? rawTasks : [];
   const { data: commandCenter, refetch: refetchCC } = useTodayCommandCenter();
   const { data: calendarData } = useCalendarEvents(5);
   
