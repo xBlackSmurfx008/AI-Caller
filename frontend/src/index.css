@@ -7,6 +7,7 @@
     --sar: env(safe-area-inset-right);
     --sab: env(safe-area-inset-bottom);
     --sal: env(safe-area-inset-left);
+    --keyboard-height: 0px;
   }
 
   html {
@@ -26,6 +27,13 @@
     /* Prevent overscroll/bounce on iOS */
     overscroll-behavior: none;
     -webkit-overflow-scrolling: touch;
+    /* Smooth transition when keyboard appears */
+    transition: padding-bottom 0.25s ease-out;
+  }
+  
+  /* When keyboard is visible, add padding to push content up */
+  body.keyboard-visible {
+    padding-bottom: var(--keyboard-height);
   }
   
   #root {
@@ -47,5 +55,11 @@
   
   label {
     color: #e2e8f0; /* slate-200 */
+  }
+  
+  /* iOS keyboard input scroll fix */
+  input:focus, textarea:focus {
+    /* Ensure focused inputs scroll into view */
+    scroll-margin-bottom: calc(var(--keyboard-height) + 20px);
   }
 }

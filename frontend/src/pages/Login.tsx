@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 import { Button } from '@/components/ui/Button';
@@ -18,6 +18,15 @@ export const Login = () => {
   const [shouldNavigate, setShouldNavigate] = useState(false);
   const navigate = useNavigate();
   const { signIn, isAuthenticated } = useAuth();
+  const formRef = useRef<HTMLFormElement>(null);
+
+  // Scroll focused input into view when keyboard appears (iOS fix)
+  const handleInputFocus = useCallback((e: React.FocusEvent<HTMLInputElement>) => {
+    // Delay to allow keyboard to appear
+    setTimeout(() => {
+      e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 300);
+  }, []);
 
   // Use effect to handle navigation after auth state is confirmed
   // This is more reliable on iOS WKWebView than navigating in the submit handler
@@ -59,10 +68,10 @@ export const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4">
-      <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSA2MCAwIEwgMCAwIDAgNjAiIGZpbGw9Im5vbmUiIHN0cm9rZT0icmdiYSgyNTUsMjU1LDI1NSwwLjAzKSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')] opacity-40" />
+    <div className="min-h-screen flex items-start justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4 pt-[15vh] overflow-auto">
+      <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSA2MCAwIEwgMCAwIDAgNjAiIGZpbGw9Im5vbmUiIHN0cm9rZT0icmdiYSgyNTUsMjU1LDI1NSwwLjAzKSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')] opacity-40 pointer-events-none" />
       
-      <Card className="w-full max-w-md relative z-10 bg-slate-800/90 border-slate-700 backdrop-blur-sm shadow-2xl">
+      <Card className="w-full max-w-md relative z-10 bg-slate-800/90 border-slate-700 backdrop-blur-sm shadow-2xl mb-[50vh]">
         <CardHeader className="text-center pb-2">
           <div className="mx-auto mb-4 w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center shadow-lg shadow-purple-500/30">
             <Sparkles className="w-8 h-8 text-white" />
@@ -74,7 +83,7 @@ export const Login = () => {
         </CardHeader>
         
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
             {error && (
               <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-3 flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
@@ -90,6 +99,7 @@ export const Login = () => {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                onFocus={handleInputFocus}
                 placeholder="you@example.com"
                 disabled={isLoading}
                 required
@@ -106,6 +116,7 @@ export const Login = () => {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                onFocus={handleInputFocus}
                 placeholder="••••••••"
                 disabled={isLoading}
                 required

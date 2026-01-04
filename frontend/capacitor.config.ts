@@ -23,7 +23,8 @@ const config: CapacitorConfig = {
       splashImmersive: true,
     },
     Keyboard: {
-      resize: 'body',
+      // 'ionic' mode pushes content up properly on iOS
+      resize: 'ionic',
       resizeOnFullScreen: true,
     },
   },
