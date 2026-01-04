@@ -4,6 +4,8 @@ import path from 'path'
 
 // https://vite.dev/config/
 export default defineConfig({
+  // Use relative base so assets load correctly in Capacitor (custom scheme)
+  base: './',
   plugins: [react()],
   resolve: {
     alias: {
