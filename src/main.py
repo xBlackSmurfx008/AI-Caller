@@ -25,6 +25,10 @@ from src.api.routes.outlook import router as outlook_router
 from src.api.routes.audio import router as audio_router
 from src.api.routes.pec import router as pec_router
 from src.api.routes.relationship_ops import router as relationship_ops_router
+from src.api.routes.ai import router as ai_router
+from src.api.routes.chat import router as chat_router
+from src.api.routes.imessage import router as imessage_router
+from src.api.routes.email_ingest import router as email_ingest_router
 from src.api.webhooks.twilio_webhook import router as twilio_webhook_router
 from src.utils.config import get_settings
 from src.integrations.manager import get_integration_manager
@@ -148,6 +152,10 @@ app.include_router(outlook_router, prefix="/api/outlook", tags=["outlook"])
 app.include_router(audio_router, prefix="/api/audio", tags=["audio"])
 app.include_router(pec_router, prefix="/api", tags=["pec"])
 app.include_router(relationship_ops_router, prefix="/api/relationship-ops", tags=["relationship-ops"])
+app.include_router(ai_router, prefix="/api/ai", tags=["ai"])
+app.include_router(chat_router, prefix="/api/chat", tags=["chat"])
+app.include_router(imessage_router, prefix="/api/imessage", tags=["imessage"])
+app.include_router(email_ingest_router, prefix="/api/email-ingest", tags=["email-ingest"])
 app.include_router(health_router, prefix="/api", tags=["health"])
 app.include_router(twilio_webhook_router, prefix="/webhooks/twilio", tags=["webhooks"])
 
@@ -293,9 +301,9 @@ async def _start_background_tasks():
         Master Networker CRM - Scheduled Relationship Ops Runs
         
         Runs 4 times daily (America/New_York timezone):
-        - 5:30 AM: Morning Command Plan
+        - 7:00 AM: Morning Command Plan
         - 12:00 PM: Midday Momentum Push
-        - 4:30 PM: Afternoon Coordination & Follow-Up
+        - 3:00 PM: Afternoon Coordination & Follow-Up
         - 8:00 PM: Relationship Review + Next-Day Prep
         """
         import pytz
@@ -307,10 +315,10 @@ async def _start_background_tasks():
         
         # Schedule configuration: (hour, minute, run_type)
         schedules = [
-            (5, 30, "morning"),
+            (7, 0, "morning"),
             (12, 0, "midday"),
-            (16, 30, "afternoon"),
-            (20, 0, "evening")
+            (15, 0, "afternoon"),
+            (20, 0, "evening"),
         ]
         
         while True:

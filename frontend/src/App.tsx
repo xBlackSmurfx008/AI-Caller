@@ -2,8 +2,10 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
+import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import { Navbar } from '@/components/layout/Navbar';
 import { BottomNav } from '@/components/layout/BottomNav';
+import { Today } from '@/pages/Today';
 import { Dashboard } from '@/pages/Dashboard';
 import { CommandCenter } from '@/pages/CommandCenter';
 import { Tasks } from '@/pages/Tasks';
@@ -24,7 +26,9 @@ import { Onboarding } from '@/pages/Onboarding';
 import { AuditLog } from '@/pages/AuditLog';
 import { RelationshipOpsRunsList } from '@/pages/RelationshipOpsRunsList';
 import { RelationshipOpsRun } from '@/pages/RelationshipOpsRun';
+import { Login } from '@/pages/Login';
 import { useCalendarStatus, useGodfatherSettings } from '@/lib/hooks';
+import { Loader2 } from 'lucide-react';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -34,6 +38,29 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+// Auth guard - redirects to login if not authenticated
+function AuthGuard({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, loading } = useAuth();
+  const location = useLocation();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-purple-500 mx-auto mb-4" />
+          <p className="text-slate-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  return <>{children}</>;
+}
 
 function OnboardingGuard({ children }: { children: React.ReactNode }) {
   const location = useLocation();
@@ -56,26 +83,47 @@ function AppContent() {
       <OnboardingGuard>
         <Navbar />
         <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/command-center" element={<CommandCenter />} />
-        <Route path="/onboarding" element={<Onboarding />} />
-        <Route path="/tasks" element={<Tasks />} />
-        <Route path="/projects" element={<Projects />} />
-        <Route path="/projects/:id" element={<ProjectDetail />} />
-        <Route path="/daily-plan" element={<DailyPlan />} />
-        <Route path="/calendar" element={<Calendar />} />
-        <Route path="/contacts" element={<Contacts />} />
-        <Route path="/contacts/:id" element={<ContactDetail />} />
-        <Route path="/messages" element={<Messages />} />
-        <Route path="/messaging" element={<Messaging />} />
-        <Route path="/trusted-list" element={<TrustedList />} />
-        <Route path="/cost" element={<CostMonitoring />} />
-        <Route path="/approvals" element={<Approvals />} />
-        <Route path="/audit-log" element={<AuditLog />} />
-        <Route path="/settings" element={<Settings />} />
-        <Route path="/oauth/callback" element={<OAuthCallback />} />
-        <Route path="/relationship-ops/runs" element={<RelationshipOpsRunsList />} />
-        <Route path="/relationship-ops/runs/:runId" element={<RelationshipOpsRun />} />
+          {/* Core Routes - Consolidated */}
+          <Route path="/" element={<Today />} />
+          <Route path="/onboarding" element={<Onboarding />} />
+          
+          {/* People (Contacts) */}
+          <Route path="/contacts" element={<Contacts />} />
+          <Route path="/contacts/:id" element={<ContactDetail />} />
+          
+          {/* Messaging */}
+          <Route path="/messaging" element={<Messaging />} />
+          <Route path="/messages" element={<Messages />} />
+          
+          {/* Projects & Tasks */}
+          <Route path="/projects" element={<Projects />} />
+          <Route path="/projects/:id" element={<ProjectDetail />} />
+          
+          {/* Approvals */}
+          <Route path="/approvals" element={<Approvals />} />
+          
+          {/* Settings Hub - includes admin features */}
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/settings/calendar" element={<Calendar />} />
+          <Route path="/settings/tasks" element={<Tasks />} />
+          <Route path="/settings/trusted" element={<TrustedList />} />
+          <Route path="/settings/costs" element={<CostMonitoring />} />
+          <Route path="/settings/audit" element={<AuditLog />} />
+          
+          {/* Legacy routes - redirect to new structure */}
+          <Route path="/dashboard" element={<Navigate to="/" replace />} />
+          <Route path="/command-center" element={<Navigate to="/" replace />} />
+          <Route path="/daily-plan" element={<Navigate to="/" replace />} />
+          <Route path="/calendar" element={<Navigate to="/settings/calendar" replace />} />
+          <Route path="/tasks" element={<Navigate to="/settings/tasks" replace />} />
+          <Route path="/trusted-list" element={<Navigate to="/settings/trusted" replace />} />
+          <Route path="/cost" element={<Navigate to="/settings/costs" replace />} />
+          <Route path="/audit-log" element={<Navigate to="/settings/audit" replace />} />
+          
+          {/* OAuth & Relationship Ops */}
+          <Route path="/oauth/callback" element={<OAuthCallback />} />
+          <Route path="/relationship-ops/runs" element={<RelationshipOpsRunsList />} />
+          <Route path="/relationship-ops/runs/:runId" element={<RelationshipOpsRun />} />
         </Routes>
         <BottomNav />
       </OnboardingGuard>
@@ -107,12 +155,31 @@ function AppContent() {
   );
 }
 
+function AppRoutes() {
+  return (
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route path="/oauth/callback" element={<OAuthCallback />} />
+      <Route
+        path="/*"
+        element={
+          <AuthGuard>
+            <AppContent />
+          </AuthGuard>
+        }
+      />
+    </Routes>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <AppContent />
-      </BrowserRouter>
+      <AuthProvider>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.aicaller.imessage-connector</string>
+    
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/mr.008/Desktop/Projects/AI Caller/venv/bin/python3</string>
+        <string>/Users/mr.008/Desktop/Projects/AI Caller/scripts/mac_imessage_connector.py</string>
+    </array>
+    
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>AI_CALLER_API_URL</key>
+        <string>https://ai-caller-ten.vercel.app</string>
+        
+        <key>AI_CALLER_AUTH_TOKEN</key>
+        <string>ai-caller-auth-2025-secure</string>
+    </dict>
+    
+    <!-- Run every 15 minutes to stay fresh for the 4x/day Orchestrator runs -->
+    <key>StartInterval</key>
+    <integer>900</integer>
+    
+    <!-- Also run at login -->
+    <key>RunAtLoad</key>
+    <true/>
+    
+    <!-- Keep trying if it fails -->
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    
+    <!-- Log output for debugging -->
+    <key>StandardOutPath</key>
+    <string>/tmp/imessage-connector.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/imessage-connector.err</string>
+    
+    <!-- Nice process (low priority) -->
+    <key>Nice</key>
+    <integer>10</integer>
+    
+    <!-- Working directory -->
+    <key>WorkingDirectory</key>
+    <string>/Users/mr.008/Desktop/Projects/AI Caller</string>
+</dict>
+</plist>
+

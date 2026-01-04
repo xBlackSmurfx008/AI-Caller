@@ -474,3 +474,4 @@ def _format_action_response(db: Session, action: RelationshipAction) -> Relation
         expires_at=action.expires_at.isoformat() if action.expires_at else None
     )
 
+

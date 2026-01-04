@@ -27,6 +27,53 @@ class Task(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
+class ChatSession(Base):
+    """Durable chat thread for Godfather assistant conversations."""
+    __tablename__ = "chat_sessions"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
+    title = Column(String, nullable=True)
+    # Scope: global Godfather thread or per-project thread
+    # - scope_type: "global" | "project"
+    # - scope_id: for project scope, project_id; for global scope, can be NULL
+    scope_type = Column(String, nullable=False, default="global", index=True)
+    scope_id = Column(String, nullable=True, index=True)
+    # Optional actor identity (useful if multiple users are added later)
+    actor_phone = Column(String, nullable=True, index=True)
+    actor_email = Column(String, nullable=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    messages = relationship("ChatMessage", back_populates="session", cascade="all, delete-orphan")
+    summary = relationship("ChatSessionSummary", back_populates="session", uselist=False, cascade="all, delete-orphan")
+
+
+class ChatMessage(Base):
+    """Message within a chat session (user/assistant/system/tool)."""
+    __tablename__ = "chat_messages"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
+    session_id = Column(String, ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    role = Column(String, nullable=False, index=True)  # "system", "user", "assistant", "tool"
+    content = Column(Text, nullable=False)
+    meta_data = Column("metadata", JSON, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    session = relationship("ChatSession", back_populates="messages")
+
+
+class ChatSessionSummary(Base):
+    """Rolling summary for a chat session (compressed history)."""
+    __tablename__ = "chat_session_summaries"
+
+    session_id = Column(String, ForeignKey("chat_sessions.id", ondelete="CASCADE"), primary_key=True, index=True)
+    summary = Column(Text, nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    version = Column(Integer, default=1)
+
+    session = relationship("ChatSession", back_populates="summary")
+
+
 class Contact(Base):
     """Contact model for storing user contacts"""
     __tablename__ = "contacts"
@@ -377,6 +424,44 @@ class WorkPreferences(Base):
     max_blocks_per_day = Column(Integer, default=8)  # Maximum scheduled task blocks per day
     task_switching_penalty = Column(Integer, default=0)  # Minutes to add when switching between tasks
     timezone = Column(String, default="UTC")  # IANA timezone string
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class AIAutonomyConfig(Base):
+    """Runtime AI autonomy configuration stored in DB (overrides env defaults when present)."""
+    __tablename__ = "ai_autonomy_config"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
+    level = Column(String, default="balanced")  # "cautious" | "balanced" | "autopilot"
+    settings = Column(JSON, nullable=True)  # Stores UI settings for future expansion
+    auto_execute_high_risk = Column(Boolean, default=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class GodfatherProfile(Base):
+    """Godfather personal profile (used as durable 'who I am' context for the assistant)."""
+    __tablename__ = "godfather_profile"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
+
+    full_name = Column(String, nullable=True)
+    preferred_name = Column(String, nullable=True)
+    pronouns = Column(String, nullable=True)
+
+    location = Column(String, nullable=True)  # City/region
+    timezone = Column(String, default="UTC")
+
+    company = Column(String, nullable=True)
+    title = Column(String, nullable=True)
+
+    bio = Column(Text, nullable=True)  # short bio
+    assistant_notes = Column(Text, nullable=True)  # "how you want the assistant to behave for you"
+
+    # Extra structured info (lightweight, extendable)
+    preferences = Column(JSON, nullable=True)  # e.g. {"tone":"direct","signoff":"-Stephen", ...}
+
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
@@ -771,4 +856,21 @@ class GodfatherIntention(Base):
     
     # Relationships
     contact = relationship("Contact", backref="godfather_intentions")
+
+
+class OAuthToken(Base):
+    """OAuth tokens for external services (Gmail, Google Calendar, Outlook, etc.)
+    
+    Stores tokens in database for serverless environments where file storage is ephemeral.
+    """
+    __tablename__ = "oauth_tokens"
+    
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
+    provider = Column(String, nullable=False, index=True)  # gmail, google_calendar, outlook
+    token_data = Column(JSON, nullable=False)  # Full token JSON (access_token, refresh_token, etc.)
+    scopes = Column(JSON, nullable=True)  # List of OAuth scopes
+    email = Column(String, nullable=True)  # Associated email address
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 

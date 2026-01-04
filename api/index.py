@@ -249,6 +249,20 @@ except Exception as e:
     traceback.print_exc()
 
 try:
+    from src.api.routes.imessage import router as imessage_router
+    app.include_router(imessage_router, prefix="/api/imessage", tags=["imessage"])
+except Exception as e:
+    print(f"Warning: Failed to load imessage router: {e}")
+    traceback.print_exc()
+
+try:
+    from src.api.routes.email_ingest import router as email_ingest_router
+    app.include_router(email_ingest_router, prefix="/api/email-ingest", tags=["email-ingest"])
+except Exception as e:
+    print(f"Warning: Failed to load email-ingest router: {e}")
+    traceback.print_exc()
+
+try:
     from src.api.routes.cron import router as cron_router
     app.include_router(cron_router, prefix="/api", tags=["cron"])
 except Exception as e:
@@ -260,6 +274,13 @@ try:
     app.include_router(health_router, prefix="/api", tags=["health"])
 except Exception as e:
     print(f"Warning: Failed to load health router: {e}")
+    traceback.print_exc()
+
+try:
+    from src.api.routes.ai import router as ai_router
+    app.include_router(ai_router, prefix="/api/ai", tags=["ai"])
+except Exception as e:
+    print(f"Warning: Failed to load ai router: {e}")
     traceback.print_exc()
 
 try:

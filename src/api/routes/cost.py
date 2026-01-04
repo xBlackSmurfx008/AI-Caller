@@ -43,6 +43,63 @@ class TaskCostResponse(BaseModel):
     cost_events_count: int
 
 
+class BudgetCreateRequest(BaseModel):
+    scope: str  # "overall", "provider", "project", "agent"
+    scope_id: Optional[str] = None
+    period: str  # "daily", "weekly", "monthly"
+    limit: float
+    currency: str = "USD"
+    enforcement_mode: str = "warn"  # "warn", "require_confirmation", "hard_stop"
+
+
+@router.post("/budgets", status_code=status.HTTP_201_CREATED)
+@limiter.limit("30/minute")
+async def create_budget(
+    request: Request,
+    payload: BudgetCreateRequest,
+    db: Session = Depends(get_db),
+):
+    """Create a budget policy."""
+    # Basic validation
+    if payload.scope not in {"overall", "provider", "project", "agent"}:
+        raise HTTPException(status_code=400, detail="Invalid scope")
+    if payload.period not in {"daily", "weekly", "monthly"}:
+        raise HTTPException(status_code=400, detail="Invalid period")
+    if payload.enforcement_mode not in {"warn", "require_confirmation", "hard_stop"}:
+        raise HTTPException(status_code=400, detail="Invalid enforcement_mode")
+    if payload.limit <= 0:
+        raise HTTPException(status_code=400, detail="Budget limit must be > 0")
+    if payload.scope != "overall" and not (payload.scope_id or "").strip():
+        raise HTTPException(status_code=400, detail="scope_id required for non-overall budgets")
+
+    budget = budget_manager.create_budget(
+        db,
+        scope=payload.scope,
+        scope_id=(payload.scope_id or None),
+        period=payload.period,
+        limit=float(payload.limit),
+        currency=payload.currency,
+        enforcement_mode=payload.enforcement_mode,
+    )
+    return {"success": True, "budget_id": budget.id}
+
+
+@router.delete("/budgets/{budget_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("30/minute")
+async def delete_budget(
+    request: Request,
+    budget_id: str,
+    db: Session = Depends(get_db),
+):
+    """Delete a budget policy."""
+    budget = db.query(Budget).filter(Budget.id == budget_id).first()
+    if not budget:
+        raise HTTPException(status_code=404, detail="Budget not found")
+    db.delete(budget)
+    db.commit()
+    return
+
+
 @router.get("/summary", response_model=CostSummaryResponse)
 @limiter.limit("100/minute")
 async def get_cost_summary(

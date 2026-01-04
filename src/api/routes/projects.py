@@ -238,6 +238,39 @@ async def update_project(
     )
 
 
+@router.get("/{project_id}/stakeholders")
+async def get_stakeholders(project_id: str, db: Session = Depends(get_db)):
+    """Get all stakeholders for a project with contact details"""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
+    
+    stakeholders = db.query(ProjectStakeholder).filter(
+        ProjectStakeholder.project_id == project_id
+    ).all()
+    
+    result = []
+    for s in stakeholders:
+        contact = db.query(Contact).filter(Contact.id == s.contact_id).first()
+        result.append({
+            "id": s.id,
+            "contact_id": s.contact_id,
+            "contact_name": contact.name if contact else "Unknown",
+            "contact_email": contact.email if contact else None,
+            "contact_phone": contact.phone_number if contact else None,
+            "contact_organization": contact.organization if contact else None,
+            "role": s.role,
+            "how_they_help": s.how_they_help,
+            "how_we_help": s.how_we_help,
+            "created_at": s.created_at.isoformat()
+        })
+    
+    return {"stakeholders": result}
+
+
 @router.post("/{project_id}/stakeholders", response_model=dict)
 async def add_stakeholder(
     project_id: str,

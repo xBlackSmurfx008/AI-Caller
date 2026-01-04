@@ -706,6 +706,7 @@ ${message.type === 'email' ? 'SUBJECT: [improved subject]\n\n' : ''}[polished me
                       const isEmail = interaction.channel === 'email';
                       const contactName = interaction.metadata?.contact_name || 'Unknown';
                       const direction = interaction.metadata?.direction || 'outbound';
+                      const isOutbound = direction === 'outbound';
                       const subject = interaction.metadata?.subject;
                       
                       // Extract message content from raw_content
@@ -721,80 +722,85 @@ ${message.type === 'email' ? 'SUBJECT: [improved subject]\n\n' : ''}[polished me
                       return (
                         <div
                           key={interaction.id}
-                          className={`border rounded-lg p-4 cursor-pointer transition-colors ${
-                            selectedHistoryMessage?.id === interaction.id
-                              ? 'border-purple-500 bg-purple-50'
-                              : 'border-gray-200 hover:border-gray-300'
-                          }`}
-                          onClick={() => setSelectedHistoryMessage(interaction)}
+                          className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}
                         >
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-2">
-                                {isEmail ? (
-                                  <Mail className="w-4 h-4 text-gray-500" />
-                                ) : (
-                                  <MessageSquare className="w-4 h-4 text-gray-500" />
-                                )}
-                                <span className="font-semibold text-gray-900">
-                                  {contactName}
-                                </span>
-                                <span className="text-xs text-gray-500">
-                                  ({interaction.channel.toUpperCase()})
-                                </span>
-                                <span className="text-xs px-2 py-0.5 rounded bg-green-100 text-green-800">
-                                  {direction === 'outbound' ? 'Sent' : 'Received'}
-                                </span>
-                                <span className="text-xs text-gray-400 ml-auto">
-                                  {format(new Date(interaction.created_at), 'MMM d, h:mm a')}
-                                </span>
-                              </div>
-                              {isEmail && subject && (
-                                <p className="text-sm font-medium text-gray-700 mb-1">
-                                  {subject}
-                                </p>
-                              )}
-                              <p className="text-sm text-gray-600 line-clamp-2">
-                                {messageContent}
-                              </p>
-                              {interaction.summary && (
-                                <div className="mt-2 pt-2 border-t border-gray-200">
-                                  <p className="text-xs text-gray-500 italic">
-                                    {interaction.summary.summary}
+                          <div
+                            className={`max-w-[85%] rounded-lg p-4 cursor-pointer transition-colors ${
+                              selectedHistoryMessage?.id === interaction.id
+                                ? 'ring-2 ring-purple-500'
+                                : ''
+                            } ${
+                              isOutbound
+                                ? 'bg-purple-600 text-white'
+                                : 'bg-gray-100 text-gray-900'
+                            }`}
+                            onClick={() => setSelectedHistoryMessage(interaction)}
+                          >
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                  {isEmail ? (
+                                    <Mail className={`w-4 h-4 flex-shrink-0 ${isOutbound ? 'text-white/70' : 'text-gray-500'}`} />
+                                  ) : (
+                                    <MessageSquare className={`w-4 h-4 flex-shrink-0 ${isOutbound ? 'text-white/70' : 'text-gray-500'}`} />
+                                  )}
+                                  <span className={`font-semibold ${isOutbound ? 'text-white' : 'text-gray-900'}`}>
+                                    {isOutbound ? `You → ${contactName}` : `${contactName} → You`}
+                                  </span>
+                                  <span className={`text-xs ${isOutbound ? 'text-white/70' : 'text-gray-500'}`}>
+                                    ({interaction.channel.toUpperCase()})
+                                  </span>
+                                </div>
+                                <div className={`text-xs mb-2 ${isOutbound ? 'text-white/70' : 'text-gray-500'}`}>
+                                  {format(new Date(interaction.created_at), 'MMM d, yyyy · h:mm a')}
+                                </div>
+                                {isEmail && subject && (
+                                  <p className={`text-sm font-medium mb-1 ${isOutbound ? 'text-white/90' : 'text-gray-700'}`}>
+                                    {subject}
                                   </p>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {selectedHistoryMessage?.id === interaction.id && (
-                            <div className="mt-4 pt-4 border-t space-y-3">
-                              <div>
-                                <label className="block text-xs font-medium text-gray-700 mb-1">
-                                  Full Message
-                                </label>
-                                <div className="text-sm text-gray-900 bg-gray-50 p-3 rounded whitespace-pre-wrap">
+                                )}
+                                <p className={`text-sm line-clamp-2 ${isOutbound ? 'text-white/90' : 'text-gray-600'}`}>
                                   {messageContent}
-                                </div>
+                                </p>
+                                {interaction.summary && (
+                                  <div className={`mt-2 pt-2 border-t ${isOutbound ? 'border-white/20' : 'border-gray-200'}`}>
+                                    <p className={`text-xs italic ${isOutbound ? 'text-white/70' : 'text-gray-500'}`}>
+                                      {interaction.summary.summary}
+                                    </p>
+                                  </div>
+                                )}
                               </div>
-                              
-                              {interaction.summary && (
+                            </div>
+
+                            {selectedHistoryMessage?.id === interaction.id && (
+                              <div className={`mt-4 pt-4 border-t space-y-3 ${isOutbound ? 'border-white/20' : 'border-gray-200'}`}>
                                 <div>
-                                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                                    AI Summary
+                                  <label className={`block text-xs font-medium mb-1 ${isOutbound ? 'text-white/80' : 'text-gray-700'}`}>
+                                    Full Message
                                   </label>
-                                  <div className="text-sm text-gray-700 bg-blue-50 p-3 rounded">
-                                    <p className="mb-2">{interaction.summary.summary}</p>
-                                    {interaction.summary.sentiment_explanation && (
-                                      <p className="text-xs text-gray-600 italic">
-                                        Sentiment: {interaction.summary.sentiment_explanation}
-                                      </p>
-                                    )}
+                                  <div className={`text-sm p-3 rounded whitespace-pre-wrap ${isOutbound ? 'bg-purple-700/50 text-white' : 'bg-white text-gray-900'}`}>
+                                    {messageContent}
                                   </div>
                                 </div>
-                              )}
-                            </div>
-                          )}
+                                
+                                {interaction.summary && (
+                                  <div>
+                                    <label className={`block text-xs font-medium mb-1 ${isOutbound ? 'text-white/80' : 'text-gray-700'}`}>
+                                      AI Summary
+                                    </label>
+                                    <div className={`text-sm p-3 rounded ${isOutbound ? 'bg-purple-700/50 text-white' : 'bg-blue-50 text-gray-700'}`}>
+                                      <p className="mb-2">{interaction.summary.summary}</p>
+                                      {interaction.summary.sentiment_explanation && (
+                                        <p className={`text-xs italic ${isOutbound ? 'text-white/70' : 'text-gray-600'}`}>
+                                          Sentiment: {interaction.summary.sentiment_explanation}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       );
                       });

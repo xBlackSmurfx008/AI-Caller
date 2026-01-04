@@ -118,7 +118,7 @@ export const CalendarEvents = () => {
           </div>
         </CardHeader>
         <CardContent>
-          <p className="text-gray-500 text-center py-4">No upcoming events</p>
+          <p className="text-slate-400 text-center py-4">No upcoming events</p>
         </CardContent>
       </Card>
     );
@@ -160,24 +160,26 @@ export const CalendarEvents = () => {
             return (
               <div
                 key={event.id}
-                className="border-l-4 border-purple-500 pl-4 py-2 hover:bg-gray-50 rounded-r transition-colors"
+                className="border-l-4 border-purple-500 pl-4 py-2 rounded-r transition-colors hover:bg-slate-800/60"
               >
-                <h4 className="font-semibold text-gray-900">{event.summary}</h4>
+                <h4 className="font-semibold text-white">{event.summary}</h4>
                 {startDate && (
-                  <p className="text-sm text-gray-600 mt-1">
-                    {format(startDate, 'MMM d, yyyy h:mm a')}
-                    {endDate && ` - ${format(endDate, 'h:mm a')}`}
+                  <p className="text-sm mt-1">
+                    <span className="text-blue-400">
+                      {format(startDate, 'MMM d, yyyy h:mm a')}
+                      {endDate && ` - ${format(endDate, 'h:mm a')}`}
+                    </span>
                   </p>
                 )}
                 {event.location && (
-                  <p className="text-sm text-gray-500 mt-1">📍 {event.location}</p>
+                  <p className="text-sm text-slate-300 mt-1">📍 {event.location}</p>
                 )}
                 {event.htmlLink && (
                   <a
                     href={event.htmlLink}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-sm text-purple-600 hover:underline mt-1 inline-block"
+                    className="text-sm text-blue-400 hover:underline mt-1 inline-block"
                   >
                     View in Google Calendar
                   </a>

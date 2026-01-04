@@ -89,6 +89,74 @@ async def cron_tick(request: Request):
         logger.warning("cron_budget_check_failed", error=str(e))
         results["budget_check"] = {"ok": False, "error": str(e)}
 
+    # 5) Email ingestion (best-effort, runs before relationship ops to ensure fresh data)
+    try:
+        from src.database.database import SessionLocal
+        from src.api.routes.email_ingest import _ingest_gmail_messages, _ingest_outlook_messages
+
+        db = SessionLocal()
+        try:
+            gmail_result = await _ingest_gmail_messages(db, max_messages=30, query="newer_than:6h")
+            outlook_result = await _ingest_outlook_messages(db, max_messages=30)
+            results["email_ingest"] = {
+                "ok": True,
+                "gmail": {"ingested": gmail_result.ingested, "skipped": gmail_result.skipped},
+                "outlook": {"ingested": outlook_result.ingested, "skipped": outlook_result.skipped},
+            }
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning("cron_email_ingest_failed", error=str(e))
+        results["email_ingest"] = {"ok": False, "error": str(e)}
+
+    # 6) Relationship ops scheduler (runs at 7:00, 12:00, 15:00, 20:00 ET)
+    # The service has built-in dedup (won't re-run if already completed today for that run_type).
+    try:
+        from datetime import datetime
+        import pytz
+        from src.database.database import SessionLocal
+        from src.orchestrator.relationship_ops import RelationshipOpsService
+
+        tz = pytz.timezone("America/New_York")
+        now = datetime.now(tz)
+        current_hour = now.hour
+
+        # Map current hour to run_type (if applicable)
+        hour_to_run_type = {
+            7: "morning",
+            12: "midday",
+            15: "afternoon",
+            20: "evening",
+        }
+
+        run_type = hour_to_run_type.get(current_hour)
+        if run_type:
+            db = SessionLocal()
+            try:
+                service = RelationshipOpsService()
+                # execute_run returns existing run if already completed today (dedup built-in)
+                result = service.execute_run(db, run_type)
+                results["relationship_ops"] = {
+                    "ok": True,
+                    "run_type": run_type,
+                    "run_id": result.id,
+                    "actions": len(result.top_actions or []),
+                    "status": result.status,
+                }
+                logger.info(
+                    "cron_relationship_ops_triggered",
+                    run_type=run_type,
+                    run_id=result.id,
+                    status=result.status,
+                )
+            finally:
+                db.close()
+        else:
+            results["relationship_ops"] = {"ok": True, "skipped": True, "reason": f"hour_{current_hour}_not_scheduled"}
+    except Exception as e:
+        logger.warning("cron_relationship_ops_failed", error=str(e))
+        results["relationship_ops"] = {"ok": False, "error": str(e)}
+
     return {"ok": True, "results": results}
 
 

@@ -87,10 +87,13 @@ async def calendar_oauth_callback(request: Request, code: str, state: Optional[s
 
     try:
         finish_oauth(redirect_uri=redirect_uri, code=code, state=state)
-        return RedirectResponse(f"{frontend_base}/oauth/callback?code=success")
+        logger.info("calendar_oauth_token_saved_successfully")
+        return RedirectResponse(f"{frontend_base}/oauth/callback?code=success&service=calendar")
     except Exception as e:
-        logger.error("calendar_oauth_failed", error=str(e))
-        return RedirectResponse(f"{frontend_base}/oauth/callback?error={str(e)}")
+        import traceback
+        logger.error("calendar_oauth_failed", error=str(e), traceback=traceback.format_exc())
+        from urllib.parse import quote
+        return RedirectResponse(f"{frontend_base}/oauth/callback?error={quote(str(e))}&service=calendar")
 
 
 @router.get("/events/upcoming")

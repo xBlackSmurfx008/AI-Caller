@@ -13,6 +13,7 @@ from src.utils.logging import get_logger
 from src.agent.assistant import VoiceAssistant
 from src.telephony.media_stream import MediaStreamHandler
 from src.security.policy import Actor, decide_confirmation, PlannedToolCall, is_godfather
+from src.utils.autonomy import get_auto_execute_high_risk
 from src.voice.realtime_bridge import get_realtime_bridge
 from src.messaging.messaging_service import MessagingService
 from src.database.database import get_db
@@ -166,7 +167,15 @@ async def twilio_voice_webhook(request: Request):
                     for c in (plan.get("planned_tool_calls") or [])
                 ]
 
-                policy = decide_confirmation(actor=actor, planned_calls=planned_calls)
+                # Use DB autonomy override if available (fallback to env)
+                from src.database.database import SessionLocal
+                _db = SessionLocal()
+                try:
+                    auto_execute = get_auto_execute_high_risk(_db)
+                finally:
+                    _db.close()
+
+                policy = decide_confirmation(actor=actor, planned_calls=planned_calls, auto_execute_high_risk=auto_execute)
 
                 if policy.requires_confirmation:
                     response_text = plan.get("response") or "I understand your request, but I need approval before taking action."

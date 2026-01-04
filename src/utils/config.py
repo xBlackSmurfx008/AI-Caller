@@ -25,18 +25,21 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = ""  # URL of the frontend (e.g. https://myapp.vercel.app or http://localhost:5173)
     SECRET_KEY: str = "change-me-in-production"
 
-    # OpenAI
+    # OpenAI - Chat Models (for planning, orchestration, text tasks)
     OPENAI_API_KEY: str
-    OPENAI_MODEL: str = "gpt-4o"  # Standard model for Agents SDK
-    # Prefer Responses API over chat.completions when available (optional migration)
-    OPENAI_USE_RESPONSES: bool = False
+    OPENAI_MODEL: str = "gpt-4o"  # Chat model for task planning
+    OPENAI_PLANNING_MODEL: str = ""  # Optional: separate model for complex planning (defaults to OPENAI_MODEL)
+    
+    # OpenAI - Realtime Voice Models (for voice-to-voice conversations)
     OPENAI_REALTIME_API_URL: str = "wss://api.openai.com/v1/realtime"
-    OPENAI_REALTIME_MODEL: str = "gpt-4o-realtime-preview"  # or "gpt-realtime" for production
-    OPENAI_REALTIME_VOICE: str = "alloy"  # Options: alloy, echo, fable, onyx, nova, shimmer
+    OPENAI_REALTIME_MODEL: str = "gpt-4o-realtime-preview"  # Voice model for real-time calls
+    OPENAI_REALTIME_VOICE: str = "alloy"  # Voice: alloy, echo, fable, onyx, nova, shimmer
     
     # OpenAI Advanced Features
+    OPENAI_USE_RESPONSES: bool = False  # Use Responses API (beta)
     OPENAI_ENABLE_STREAMING: bool = True  # Stream chat responses
     OPENAI_USE_STRUCTURED_OUTPUTS: bool = True  # Force valid JSON responses
+    OPENAI_MAX_TOKENS: int = 4096  # Max tokens for completions
 
     # Twilio
     TWILIO_ACCOUNT_SID: str
@@ -96,11 +99,18 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: List[str] = ["*"]
 
-    # Auth (Godfather-only)
-    # If set, all /api/* endpoints require this token via:
+    # Auth
+    # Legacy Godfather token (backwards compatibility)
+    # If set, all /api/* endpoints accept this token via:
     # - Header: X-Godfather-Token: <token>
     # - OR Authorization: Bearer <token>
     GODFATHER_API_TOKEN: str = ""
+    
+    # Supabase Auth (recommended for production)
+    # JWT secret from Supabase project settings (Settings > API > JWT Secret)
+    SUPABASE_JWT_SECRET: str = ""
+    # Supabase project URL (for verification)
+    SUPABASE_URL: str = ""
 
 
 @lru_cache()

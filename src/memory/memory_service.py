@@ -6,6 +6,7 @@ from datetime import datetime
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from src.database.models import Contact, Interaction, MemorySummary, ContactMemoryState, Commitment
+from sqlalchemy import cast, String
 from src.utils.config import get_settings
 from src.utils.openai_client import ensure_chat_model, create_openai_client
 from src.utils.logging import get_logger
@@ -57,7 +58,15 @@ class MemoryService:
                 duplicate = db.query(Interaction).filter(
                     Interaction.contact_id == contact_id,
                     Interaction.channel == channel,
-                    Interaction.meta_data['message_sid'].astext == str(message_sid)
+                    cast(Interaction.meta_data["message_sid"], String) == str(message_sid)
+                ).first()
+        elif channel == "imessage":
+            message_guid = metadata.get("message_guid") or metadata.get("guid")
+            if message_guid:
+                duplicate = db.query(Interaction).filter(
+                    Interaction.contact_id == contact_id,
+                    Interaction.channel == channel,
+                    cast(Interaction.meta_data["message_guid"], String) == str(message_guid)
                 ).first()
         elif channel == "call":
             call_sid = metadata.get("call_sid")
@@ -65,7 +74,7 @@ class MemoryService:
                 duplicate = db.query(Interaction).filter(
                     Interaction.contact_id == contact_id,
                     Interaction.channel == channel,
-                    Interaction.meta_data['call_sid'].astext == str(call_sid)
+                    cast(Interaction.meta_data["call_sid"], String) == str(call_sid)
                 ).first()
         
         # If no duplicate found by ID, check by content and recent timestamp
@@ -95,7 +104,7 @@ class MemoryService:
             contact_id=contact_id,
             channel=channel,
             raw_content=raw_content,
-            metadata=metadata
+            meta_data=metadata
         )
         db.add(interaction)
         db.commit()

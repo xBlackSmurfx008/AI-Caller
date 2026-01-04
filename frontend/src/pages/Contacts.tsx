@@ -138,7 +138,7 @@ export const Contacts = () => {
     createContact.mutate(newContact, {
       onSuccess: () => {
         toast.success('Contact created successfully');
-        setNewContact({ name: '', phone_number: '', email: '', organization: '' });
+        setNewContact({ name: '', phone_number: '', email: '', organization: '', notes: '' });
         setShowAddForm(false);
       },
       onError: (error: any) => {

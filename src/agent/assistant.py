@@ -9,7 +9,6 @@ from src.utils.logging import get_logger
 from src.utils.errors import OpenAIError
 from src.utils.openai_client import (
     create_openai_client,
-    ensure_chat_model,
     retry_openai_call,
     validate_tools,
     get_openai_error_message
@@ -18,19 +17,45 @@ from src.agent.tools import TOOLS, TOOL_HANDLERS
 from src.security.policy import PlannedToolCall
 from src.orchestrator.orchestrator_service import OrchestratorService
 
+# Lazy import to avoid circular deps
+def _get_model_manager():
+    from src.ai.model_manager import get_model_manager, ModelPurpose
+    return get_model_manager(), ModelPurpose
+
+def _get_skill_manager():
+    from src.ai.skill_manager import get_skill_manager
+    return get_skill_manager()
+
 logger = get_logger(__name__)
 settings = get_settings()
 
 
 class VoiceAssistant:
-    """Voice-to-voice AI assistant (plans tool calls, then executes when approved)."""
+    """Voice-to-voice AI assistant (plans tool calls, then executes when approved).
+    
+    This assistant supports multiple modes:
+    - Chat mode: Uses gpt-4o for text-based task planning
+    - Voice mode: Uses gpt-4o-realtime-preview for real-time voice conversations
+    """
     
     def __init__(self, client: Optional[OpenAI] = None, model: Optional[str] = None):
         """Initialize the assistant"""
+        # Get model manager for proper model selection
+        model_manager, ModelPurpose = _get_model_manager()
+        
         # Use best practices client with timeout and retry configuration
         self.client = client or create_openai_client(timeout=60.0, max_retries=3)
-        self.model = ensure_chat_model(model or settings.OPENAI_MODEL)
+        
+        # Use chat model for planning (not realtime model)
+        if model:
+            self.model = model_manager._ensure_chat_compatible(model)
+        else:
+            self.model = model_manager.get_model(ModelPurpose.PLANNING)
+        
         self.orchestrator = OrchestratorService()
+        self._model_manager = model_manager
+        
+        logger.info("voice_assistant_initialized", model=self.model)
         
         # Validate tools on initialization
         is_valid, error_msg = validate_tools(TOOLS)
@@ -174,6 +199,18 @@ If context includes orchestrator_suggestions or project_context, use them to:
             ]
             
             # Add memory context if available
+            if context and "godfather_profile" in context:
+                gp = context.get("godfather_profile") or {}
+                if isinstance(gp, dict) and gp:
+                    # Keep this concise; treat as ground-truth user info.
+                    messages.append(
+                        {
+                            "role": "system",
+                            "content": "GODFATHER PROFILE (ground truth; do not invent details):\n"
+                            + json.dumps(gp, ensure_ascii=False),
+                        }
+                    )
+
             if context and "contact_memory" in context:
                 memory_info = []
                 for mem in context["contact_memory"]:
@@ -305,19 +342,68 @@ If context includes orchestrator_suggestions or project_context, use them to:
     async def handle_voice_conversation(
         self,
         audio_input: bytes,
-        session_id: str
+        session_id: str,
+        actor: Optional[Any] = None,
     ) -> bytes:
         """
-        Handle voice-to-voice conversation.
+        Handle voice-to-voice conversation using OpenAI Realtime API.
+        
+        This method bridges audio input to the OpenAI Realtime API for
+        true voice-to-voice AI conversations. It's used by Twilio Media Streams
+        for inbound calls.
         
         Args:
-            audio_input: PCM16 audio data from user
-            session_id: Session identifier
+            audio_input: PCM16 audio data from user (8kHz from Twilio)
+            session_id: Session identifier (typically call_sid)
+            actor: Optional actor (caller) for policy decisions
         
         Returns:
-            PCM16 audio data for response
+            PCM16 audio data for response (8kHz for Twilio)
+            
+        Note:
+            For full voice support, use RealtimeCallBridge directly which
+            manages the WebSocket connection and audio streaming.
         """
-        # TODO: Implement using OpenAI Realtime API
-        # This will bridge Twilio Media Streams with OpenAI Realtime API
-        raise NotImplementedError("Voice conversation not yet implemented")
+        from src.voice.realtime_bridge import get_realtime_bridge
+        from src.security.policy import Actor
+        
+        bridge = get_realtime_bridge()
+        
+        # Default actor if not provided
+        if actor is None:
+            actor = Actor(kind="external", phone_number="unknown")
+        
+        # Ensure session is started
+        if session_id not in bridge._sessions:
+            await bridge.start(call_sid=session_id, actor=actor)
+        
+        # Send audio to OpenAI
+        await bridge.handle_twilio_audio(call_sid=session_id, pcm16_8k=audio_input)
+        
+        # Note: Response audio is sent asynchronously via the bridge's listener
+        # This method doesn't return audio directly - it's handled by callbacks
+        return b""
+    
+    def get_realtime_config(self) -> Dict[str, Any]:
+        """
+        Get configuration for starting a realtime voice session.
+        
+        Returns:
+            Configuration dict with WebSocket URL, model, voice settings
+        """
+        return self._model_manager.get_realtime_config()
+    
+    def get_available_skills(self) -> List[Dict[str, Any]]:
+        """
+        Get list of available skills/tools.
+        
+        Returns:
+            List of skill definitions
+        """
+        try:
+            skill_manager = _get_skill_manager()
+            return skill_manager.get_openai_tools()
+        except Exception:
+            # Fallback to static TOOLS if skill manager not available
+            return TOOLS
 

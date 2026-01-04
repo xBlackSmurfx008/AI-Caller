@@ -12,8 +12,10 @@ from src.utils.logging import get_logger
 from src.utils.errors import TaskError
 from src.security.policy import Actor, decide_confirmation, PlannedToolCall
 from src.database.database import get_db, init_db
-from src.database.models import Task as TaskModel
+from src.database.models import Task as TaskModel, ChatSession, ChatMessage, ChatSessionSummary, GodfatherProfile
 from src.memory.memory_service import MemoryService
+from src.memory.chat_memory_service import ChatMemoryService
+from src.utils.autonomy import get_auto_execute_high_risk
 from src.orchestrator.orchestrator_service import OrchestratorService
 from src.memory.interaction_capture import capture_sms_interaction, capture_email_interaction
 from src.cost.cost_estimator import CostEstimator
@@ -26,6 +28,7 @@ router = APIRouter()
 logger = get_logger(__name__)
 assistant = VoiceAssistant()
 memory_service = MemoryService()
+chat_memory_service = ChatMemoryService()
 orchestrator_service = OrchestratorService()
 cost_estimator = CostEstimator()
 runtime_cost_tracker = RuntimeCostTracker()
@@ -48,6 +51,8 @@ class TaskRequest(BaseModel):
     actor_email: Optional[str] = None
     # Optional project association
     project_id: Optional[str] = None
+    # Optional chat session for deep history
+    chat_session_id: Optional[str] = None
 
 
 class TaskResponse(BaseModel):
@@ -86,6 +91,15 @@ async def create_task(request: TaskRequest, db: Session = Depends(get_db)):
         task_context = request.context or {}
         if request.project_id:
             task_context["project_id"] = request.project_id
+        # Resolve chat session: explicit > per-project > global
+        resolved_chat_session_id = request.chat_session_id or _resolve_chat_session_id(
+            db,
+            actor_phone=request.actor_phone,
+            actor_email=request.actor_email,
+            project_id=request.project_id,
+        )
+        if resolved_chat_session_id:
+            task_context["chat_session_id"] = resolved_chat_session_id
         
         # Create task record
         task_record = TaskModel(
@@ -104,8 +118,45 @@ async def create_task(request: TaskRequest, db: Session = Depends(get_db)):
         
         # Plan (no side effects)
         try:
-            # Enhance context with memory if contact is involved
+            # Enhance context with chat history + memory if available
             enhanced_context = request.context or {}
+
+            # Attach Godfather profile (durable self-context)
+            try:
+                prof = db.query(GodfatherProfile).order_by(GodfatherProfile.updated_at.desc()).first()
+                if prof:
+                    enhanced_context["godfather_profile"] = {
+                        "full_name": prof.full_name,
+                        "preferred_name": prof.preferred_name,
+                        "pronouns": prof.pronouns,
+                        "location": prof.location,
+                        "timezone": prof.timezone,
+                        "company": prof.company,
+                        "title": prof.title,
+                        "bio": prof.bio,
+                        "assistant_notes": prof.assistant_notes,
+                        "preferences": prof.preferences or {},
+                    }
+            except Exception:
+                pass
+
+            # Attach deep chat history if a chat session is provided
+            if resolved_chat_session_id:
+                session = db.query(ChatSession).filter(ChatSession.id == resolved_chat_session_id).first()
+                if not session:
+                    raise HTTPException(status_code=404, detail="Chat session not found")
+
+                # Persist the user message immediately for durability
+                _append_chat_message(
+                    db,
+                    session_id=resolved_chat_session_id,
+                    role="user",
+                    content=request.task,
+                    metadata={"source": "tasks_api", "task_id": task_id},
+                )
+
+                chat_context = _build_chat_context(db, resolved_chat_session_id)
+                enhanced_context = {**enhanced_context, **chat_context}
             if request.task:
                 # Try to extract contact info from task and retrieve memory
                 # This is a simple heuristic - could be improved with NLP
@@ -132,6 +183,22 @@ async def create_task(request: TaskRequest, db: Session = Depends(get_db)):
             
             plan = assistant.plan_task(request.task, enhanced_context)
             planned_tool_calls = plan.get("planned_tool_calls") or []
+
+            # Persist assistant response into chat session (if present)
+            if resolved_chat_session_id:
+                _append_chat_message(
+                    db,
+                    session_id=resolved_chat_session_id,
+                    role="assistant",
+                    content=plan.get("response") or "",
+                    metadata={
+                        "source": "tasks_api",
+                        "task_id": task_id,
+                        "status": "planned",
+                        "planned_tool_calls": planned_tool_calls,
+                    },
+                )
+                chat_memory_service.maybe_update_summary(db, resolved_chat_session_id)
             
             # Log LLM cost from planning
             openai_response = plan.get("_openai_response")
@@ -175,9 +242,11 @@ async def create_task(request: TaskRequest, db: Session = Depends(get_db)):
                 phone_number=request.actor_phone,
                 email=request.actor_email,
             )
+            auto_execute = get_auto_execute_high_risk(db)
             policy = decide_confirmation(
                 actor=actor,
                 planned_calls=[PlannedToolCall(name=c["name"], arguments=c.get("arguments") or {}) for c in planned_tool_calls],
+                auto_execute_high_risk=auto_execute,
             )
 
             task_record.status = "awaiting_confirmation" if policy.requires_confirmation else "processing"
@@ -191,6 +260,18 @@ async def create_task(request: TaskRequest, db: Session = Depends(get_db)):
 
             if not policy.requires_confirmation:
                 tool_results = await assistant.execute_planned_tools(planned_tool_calls)
+
+                # Persist tool results into chat session (if present)
+                if resolved_chat_session_id and tool_results:
+                    for tr in tool_results:
+                        _append_chat_message(
+                            db,
+                            session_id=resolved_chat_session_id,
+                            role="tool",
+                            content=str(tr.get("result") or tr),
+                            metadata={"source": "tasks_api", "task_id": task_id, "tool": tr.get("tool")},
+                        )
+                    chat_memory_service.maybe_update_summary(db, resolved_chat_session_id)
                 
                 # Capture interactions for memory system
                 await _capture_interactions_from_tools(db, tool_results)
@@ -276,6 +357,23 @@ async def confirm_task(task_id: str, request: TaskConfirmRequest, db: Session = 
     plan_response = task_record.plan_response
     try:
         tool_results = await assistant.execute_planned_tools(planned_tool_calls)
+
+        # If this task belongs to a chat session, append tool outputs
+        try:
+            ctx = task_record.context or {}
+            chat_session_id = ctx.get("chat_session_id") if isinstance(ctx, dict) else None
+            if chat_session_id and tool_results:
+                for tr in tool_results:
+                    _append_chat_message(
+                        db,
+                        session_id=chat_session_id,
+                        role="tool",
+                        content=str(tr.get("result") or tr),
+                        metadata={"source": "tasks_api_confirm", "task_id": task_record.task_id, "tool": tr.get("tool")},
+                    )
+                chat_memory_service.maybe_update_summary(db, chat_session_id)
+        except Exception:
+            pass
         
         # Capture interactions for memory system
         await _capture_interactions_from_tools(db, tool_results)
@@ -499,4 +597,104 @@ def _task_to_response(task_record: TaskModel) -> TaskResponse:
         created_at=task_record.created_at.isoformat() if task_record.created_at else datetime.utcnow().isoformat(),
         updated_at=task_record.updated_at.isoformat() if task_record.updated_at else datetime.utcnow().isoformat(),
     )
+
+
+def _append_chat_message(
+    db: Session,
+    *,
+    session_id: str,
+    role: str,
+    content: str,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> None:
+    """Append a message to a chat session (best-effort)."""
+    if not content and role != "tool":
+        return
+    msg = ChatMessage(
+        session_id=session_id,
+        role=role,
+        content=content,
+        meta_data=metadata or None,
+    )
+    db.add(msg)
+    # Touch session updated_at to reflect activity
+    db.query(ChatSession).filter(ChatSession.id == session_id).update({"updated_at": datetime.utcnow()})
+    db.commit()
+
+
+def _build_chat_context(db: Session, session_id: str, max_messages: int = 20) -> Dict[str, Any]:
+    """
+    Build `context.history` for the planner from persisted chat messages, plus a rolling summary.
+    """
+    summary = db.query(ChatSessionSummary).filter(ChatSessionSummary.session_id == session_id).first()
+    summary_text = (summary.summary if summary else "").strip()
+
+    msgs = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.session_id == session_id)
+        .order_by(ChatMessage.created_at.desc())
+        .limit(max_messages)
+        .all()
+    )
+    msgs = list(reversed(msgs))
+
+    history: List[Dict[str, str]] = []
+    for m in msgs:
+        r = (m.role or "").strip()
+        if r not in {"system", "user", "assistant"}:
+            continue
+        history.append({"role": r, "content": m.content})
+
+    if summary_text:
+        history = [{"role": "system", "content": f"CHAT SESSION SUMMARY:\n{summary_text}"}] + history
+
+    return {"history": history, "chat_summary": summary_text} if summary_text else {"history": history}
+
+
+def _resolve_chat_session_id(
+    db: Session,
+    *,
+    actor_phone: Optional[str],
+    actor_email: Optional[str],
+    project_id: Optional[str],
+) -> Optional[str]:
+    """
+    Resolve a chat session for:
+    - per-project memory when project_id is provided
+    - otherwise global Godfather memory
+
+    If none exists, create one.
+    """
+    scope_type = "project" if project_id else "global"
+    scope_id = project_id if project_id else None
+
+    q = db.query(ChatSession).filter(ChatSession.scope_type == scope_type)
+    if scope_id:
+        q = q.filter(ChatSession.scope_id == scope_id)
+    else:
+        q = q.filter(ChatSession.scope_id.is_(None))
+
+    # If actor identifiers are present, bind sessions to that actor (prevents collisions if multi-user later).
+    if actor_email:
+        q = q.filter(ChatSession.actor_email == actor_email)
+    if actor_phone:
+        q = q.filter(ChatSession.actor_phone == actor_phone)
+
+    existing = q.order_by(ChatSession.updated_at.desc()).first()
+    if existing:
+        return existing.id
+
+    # Create a new session
+    created = ChatSession(
+        id=str(uuid.uuid4()),
+        title="Project Chat" if scope_type == "project" else "Godfather Chat",
+        scope_type=scope_type,
+        scope_id=scope_id,
+        actor_phone=actor_phone,
+        actor_email=actor_email,
+    )
+    db.add(created)
+    db.commit()
+    db.refresh(created)
+    return created.id
 

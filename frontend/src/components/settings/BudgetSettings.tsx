@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Loader2, DollarSign, Plus, Trash2, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useBudgets, useCheckBudgets } from '@/lib/hooks';
+import { useBudgets, useCheckBudgets, useCreateBudget, useDeleteBudget } from '@/lib/hooks';
 import { Link } from 'react-router-dom';
 
 interface BudgetForm {
@@ -18,6 +18,8 @@ interface BudgetForm {
 export const BudgetSettings = () => {
   const { data: budgets = [], isLoading } = useBudgets(false);
   const checkBudgets = useCheckBudgets();
+  const createBudget = useCreateBudget();
+  const deleteBudget = useDeleteBudget();
   const [showForm, setShowForm] = useState(false);
   const [newBudget, setNewBudget] = useState<BudgetForm>({
     scope: 'overall',
@@ -29,9 +31,15 @@ export const BudgetSettings = () => {
 
   const handleCreateBudget = async () => {
     try {
-      // This would call an API endpoint to create budgets
-      // For now, show a message that this feature is coming
-      toast.success('Budget creation API coming soon. Use Cost Monitoring page to view budgets.');
+      await createBudget.mutateAsync({
+        scope: newBudget.scope,
+        scope_id: newBudget.scope !== 'overall' ? newBudget.scope_id : undefined,
+        period: newBudget.period,
+        limit: newBudget.limit,
+        enforcement_mode: newBudget.enforcement_mode,
+        currency: 'USD',
+      });
+      toast.success('Budget created');
       setShowForm(false);
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Failed to create budget');
@@ -234,6 +242,26 @@ export const BudgetSettings = () => {
                   {!budget.is_active && (
                     <p className="text-xs text-slate-500">Inactive</p>
                   )}
+
+                  <div className="flex justify-end mt-3">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-red-300 hover:text-red-200"
+                      disabled={deleteBudget.isPending}
+                      onClick={async () => {
+                        try {
+                          await deleteBudget.mutateAsync(budget.id);
+                          toast.success('Budget deleted');
+                        } catch (e: any) {
+                          toast.error(e?.response?.data?.detail || 'Failed to delete budget');
+                        }
+                      }}
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Delete
+                    </Button>
+                  </div>
                 </div>
               );
             })}

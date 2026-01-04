@@ -24,12 +24,24 @@ except Exception:  # pragma: no cover
 
 from src.utils.config import get_settings
 from src.utils.logging import get_logger
+from src.utils.runtime import is_serverless
 
 logger = get_logger(__name__)
 settings = get_settings()
 
 
-SCOPES = ["https://www.googleapis.com/auth/calendar"]
+# NOTE: See src/email/gmail.py for context. Google can return tokens with a superset
+# of scopes previously granted for the same OAuth client. To avoid "Scope has changed"
+# errors during token exchange, request a consistent union of scopes used by this app.
+REQUIRED_CALENDAR_SCOPES = ["https://www.googleapis.com/auth/calendar"]
+
+REQUESTED_GOOGLE_SCOPES = [
+    # Gmail (used elsewhere in the app; requesting union avoids scope mismatch errors)
+    "https://www.googleapis.com/auth/gmail.send",
+    "https://www.googleapis.com/auth/gmail.readonly",
+    # Calendar
+    "https://www.googleapis.com/auth/calendar",
+]
 
 def _require_google() -> None:
     if not _GOOGLE_OK:
@@ -53,24 +65,97 @@ def _token_path() -> str:
     return settings.GOOGLE_OAUTH_TOKEN_FILE
 
 
+def _use_db_storage() -> bool:
+    """Check if we should use database storage (for serverless environments)."""
+    if not settings.DATABASE_URL:
+        return False
+    return True
+
+
 def _save_token(creds: Credentials) -> None:
+    """Save token to database (preferred) or file."""
     _require_google()
+    token_json = creds.to_json()
+    
+    if _use_db_storage():
+        try:
+            from src.database.database import SessionLocal
+            from src.database.models import OAuthToken
+            from src.database.database import engine, Base
+            
+            db = SessionLocal()
+            try:
+                # Ensure table exists (serverless deploys may skip init_db on cold start)
+                Base.metadata.create_all(bind=engine, tables=[OAuthToken.__table__])
+                existing = db.query(OAuthToken).filter(OAuthToken.provider == "google_calendar").first()
+                if existing:
+                    existing.token_data = json.loads(token_json)
+                    existing.updated_at = datetime.now(timezone.utc)
+                else:
+                    new_token = OAuthToken(
+                        provider="google_calendar",
+                        token_data=json.loads(token_json),
+                        scopes=list(getattr(creds, "scopes", None) or REQUESTED_GOOGLE_SCOPES),
+                    )
+                    db.add(new_token)
+                db.commit()
+                logger.info("google_calendar_token_saved_to_db")
+                return
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error("google_calendar_token_db_save_failed", error=str(e))
+            # In serverless (Vercel), filesystem is read-only — do NOT fall back to file.
+            if is_serverless():
+                raise RuntimeError(f"Failed to persist Google Calendar OAuth token in DB: {e}") from e
+    
+    # File storage fallback
     path = _token_path()
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
-        f.write(creds.to_json())
+        f.write(token_json)
+    logger.info("google_calendar_token_saved_to_file", path=path)
 
 
 def _load_token() -> Optional[Credentials]:
+    """Load token from database (preferred) or file."""
     if not _GOOGLE_OK:
         return None
+    
+    # Try database first
+    if _use_db_storage():
+        try:
+            from src.database.database import SessionLocal
+            from src.database.models import OAuthToken
+            
+            db = SessionLocal()
+            try:
+                token_record = db.query(OAuthToken).filter(OAuthToken.provider == "google_calendar").first()
+                if token_record and token_record.token_data:
+                    logger.info("google_calendar_token_loaded_from_db")
+                    creds = Credentials.from_authorized_user_info(token_record.token_data)
+                    if creds and getattr(creds, "has_scopes", None) and not creds.has_scopes(REQUIRED_CALENDAR_SCOPES):
+                        logger.warning("google_calendar_token_missing_required_scopes")
+                        return None
+                    return creds
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error("google_calendar_token_db_load_failed", error=str(e))
+    
+    # Fall back to file storage
     path = _token_path()
     if not path or not os.path.exists(path):
         return None
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = f.read()
-        return Credentials.from_authorized_user_info(json.loads(data), scopes=SCOPES)
+        logger.info("google_calendar_token_loaded_from_file", path=path)
+        creds = Credentials.from_authorized_user_info(json.loads(data))
+        if creds and getattr(creds, "has_scopes", None) and not creds.has_scopes(REQUIRED_CALENDAR_SCOPES):
+            logger.warning("google_calendar_token_missing_required_scopes")
+            return None
+        return creds
     except Exception as e:
         logger.error("google_token_load_failed", error=str(e))
         return None
@@ -78,13 +163,17 @@ def _load_token() -> Optional[Credentials]:
 
 def is_connected() -> bool:
     creds = _load_token()
-    return bool(creds and creds.valid)
+    if not creds:
+        return False
+    if getattr(creds, "has_scopes", None) and not creds.has_scopes(REQUIRED_CALENDAR_SCOPES):
+        return False
+    return bool(creds.valid)
 
 
 def build_flow(redirect_uri: str, state: Optional[str] = None) -> Flow:
     _require_google()
     client_config = _load_client_config()
-    flow = Flow.from_client_config(client_config, scopes=SCOPES, state=state)
+    flow = Flow.from_client_config(client_config, scopes=REQUESTED_GOOGLE_SCOPES, state=state)
     flow.redirect_uri = redirect_uri
     return flow
 

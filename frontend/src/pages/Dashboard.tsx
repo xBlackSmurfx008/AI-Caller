@@ -1,12 +1,12 @@
 import { Link } from 'react-router-dom';
-import { TaskInput } from '@/components/tasks/TaskInput';
-import { TaskList } from '@/components/tasks/TaskList';
+import { TaskIntaker } from '@/components/tasks/TaskIntaker';
+import { RecentTasksCompact } from '@/components/tasks/RecentTasksCompact';
 import { CalendarStatus } from '@/components/calendar/CalendarStatus';
 import { CalendarEvents } from '@/components/calendar/CalendarEvents';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useDailyPlan, useCostSummary, useTasks } from '@/lib/hooks';
-import { Loader2, Calendar, DollarSign, CheckCircle2, ArrowRight, Sparkles } from 'lucide-react';
+import { Calendar, DollarSign, CheckCircle2, ArrowRight, Sparkles } from 'lucide-react';
 
 export const Dashboard = () => {
   const { data: dailyPlan } = useDailyPlan();
@@ -24,12 +24,10 @@ export const Dashboard = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      {/* AI Command Center - Task Intaker at the TOP */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white mb-2">Dashboard</h1>
-        <p className="text-white/80">
-          Your command center for tasks, calendar, and AI assistant
-        </p>
+        <TaskIntaker />
       </div>
 
       {/* Quick Stats */}
@@ -125,23 +123,16 @@ export const Dashboard = () => {
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        <div className="lg:col-span-2">
-          <TaskInput />
-        </div>
-        <div>
-          <CalendarStatus />
-        </div>
-      </div>
-
+      {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <div className="mb-6">
-            <h2 className="text-2xl font-semibold text-white mb-4">Recent Tasks</h2>
-            <TaskList />
-          </div>
+        {/* Left Column - Compact recent tasks */}
+        <div className="lg:col-span-2 space-y-6">
+          <RecentTasksCompact limit={5} />
         </div>
-        <div>
+
+        {/* Right Column - Calendar */}
+        <div className="space-y-6">
+          <CalendarStatus />
           <CalendarEvents />
         </div>
       </div>

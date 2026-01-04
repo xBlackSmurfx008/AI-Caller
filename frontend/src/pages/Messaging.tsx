@@ -158,54 +158,54 @@ export const Messaging = () => {
               ) : conversations.length === 0 ? (
                 <div className="text-center py-8 text-slate-400">
                   <MessageSquare className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p className="mb-4">No conversations yet</p>
-                  <Button
-                    variant="primary"
-                    onClick={() => setShowNewConversation(true)}
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Start New Conversation
-                  </Button>
+                  <p className="mb-1">No conversations yet</p>
+                  <p className="text-sm text-slate-500">Click <span className="font-semibold text-slate-300">New</span> to start your first one.</p>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {conversations.map((conv) => (
-                    <div
-                      key={conv.conversation_id}
-                      className={`p-3 rounded-lg cursor-pointer transition-colors ${
-                        selectedConversation?.contactId === conv.contact_id &&
-                        selectedConversation?.channel === conv.channel
-                          ? 'bg-purple-600 text-white'
-                          : 'bg-gray-800 hover:bg-gray-700 text-white'
-                      }`}
-                      onClick={() => conv.contact_id && handleSelectConversation(conv.contact_id, conv.channel)}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            {conv.channel === 'whatsapp' ? (
-                              <MessageCircle className="w-4 h-4 flex-shrink-0" />
-                            ) : (
-                              <Phone className="w-4 h-4 flex-shrink-0" />
-                            )}
-                            <span className="font-semibold truncate">{conv.contact_name}</span>
-                            <span className="text-xs opacity-75">({conv.channel})</span>
+                  {conversations.map((conv) => {
+                    // Try to find the contact name from our contacts list as fallback
+                    const matchingContact = contacts.find(c => c.id === conv.contact_id);
+                    const displayName = conv.contact_name || matchingContact?.name || 'Unknown Contact';
+                    
+                    return (
+                      <div
+                        key={conv.conversation_id}
+                        className={`p-3 rounded-lg cursor-pointer transition-colors ${
+                          selectedConversation?.contactId === conv.contact_id &&
+                          selectedConversation?.channel === conv.channel
+                            ? 'bg-purple-600 text-white'
+                            : 'bg-gray-800 hover:bg-gray-700 text-white'
+                        }`}
+                        onClick={() => conv.contact_id && handleSelectConversation(conv.contact_id, conv.channel)}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              {conv.channel === 'whatsapp' ? (
+                                <MessageCircle className="w-4 h-4 flex-shrink-0" />
+                              ) : (
+                                <Phone className="w-4 h-4 flex-shrink-0" />
+                              )}
+                              <span className="font-semibold truncate">{displayName}</span>
+                              <span className="text-xs opacity-75">({conv.channel})</span>
+                            </div>
+                            <p className="text-sm opacity-90 truncate">
+                              {conv.latest_message.text_content || '[Media]'}
+                            </p>
+                            <p className="text-xs opacity-75 mt-1">
+                              {format(new Date(conv.latest_message.timestamp), 'MMM d, yyyy · h:mm a')}
+                            </p>
                           </div>
-                          <p className="text-sm opacity-90 truncate">
-                            {conv.latest_message.text_content || '[Media]'}
-                          </p>
-                          <p className="text-xs opacity-75 mt-1">
-                            {format(new Date(conv.latest_message.timestamp), 'MMM d, h:mm a')}
-                          </p>
+                          {conv.unread_count > 0 && (
+                            <span className="ml-2 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                              {conv.unread_count}
+                            </span>
+                          )}
                         </div>
-                        {conv.unread_count > 0 && (
-                          <span className="ml-2 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                            {conv.unread_count}
-                          </span>
-                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
@@ -392,7 +392,7 @@ export const Messaging = () => {
                               )}
                               <div className="flex items-center justify-between mt-2">
                                 <span className="text-xs opacity-75">
-                                  {format(new Date(msg.timestamp), 'h:mm a')}
+                                  {format(new Date(msg.timestamp), 'MMM d, yyyy · h:mm a')}
                                 </span>
                                 {msg.status && (
                                   <span className="text-xs opacity-75 ml-2">
@@ -439,16 +439,21 @@ export const Messaging = () => {
               <CardContent className="py-12">
                 <div className="text-center text-slate-400">
                   <MessageSquare className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p className="mb-4">Select a conversation to view messages</p>
-                  <p className="text-sm text-slate-500">Or start a new conversation</p>
-                  <Button
-                    variant="primary"
-                    className="mt-4"
-                    onClick={() => setShowNewConversation(true)}
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    New Conversation
-                  </Button>
+                  {conversations.length === 0 ? (
+                    <>
+                      <p className="mb-1">No conversations yet</p>
+                      <p className="text-sm text-slate-500">
+                        Start one from the left panel to see messages here.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="mb-1">Select a conversation to view messages</p>
+                      <p className="text-sm text-slate-500">
+                        Messages and drafts for the selected contact will appear here.
+                      </p>
+                    </>
+                  )}
                 </div>
               </CardContent>
             </Card>

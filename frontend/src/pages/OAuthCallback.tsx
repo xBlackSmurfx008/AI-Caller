@@ -10,12 +10,13 @@ export const OAuthCallback = () => {
   const queryClient = useQueryClient();
   const code = searchParams.get('code');
   const error = searchParams.get('error');
+  const service = searchParams.get('service'); // New: get service from query param
   const pathname = window.location.pathname;
 
-  // Determine which service based on the callback path
-  const isGmail = pathname.includes('/gmail/oauth/callback');
-  const isOutlook = pathname.includes('/outlook/oauth/callback');
-  const isCalendar = pathname.includes('/calendar/oauth/callback') || (!isGmail && !isOutlook);
+  // Determine which service based on query param first, then fallback to path
+  const isGmail = service === 'gmail' || pathname.includes('/gmail/oauth/callback');
+  const isOutlook = service === 'outlook' || pathname.includes('/outlook/oauth/callback');
+  const isCalendar = service === 'calendar' || pathname.includes('/calendar/oauth/callback') || (!isGmail && !isOutlook);
 
   useEffect(() => {
     if (code || error) {

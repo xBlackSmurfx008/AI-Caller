@@ -98,7 +98,12 @@ def tool_risk(tool_name: str) -> Tuple[Risk, List[str]]:
     return Risk.HIGH, ["unknown tool (default-high)"]
 
 
-def decide_confirmation(actor: Actor, planned_calls: List[PlannedToolCall]) -> PolicyDecision:
+def decide_confirmation(
+    actor: Actor,
+    planned_calls: List[PlannedToolCall],
+    *,
+    auto_execute_high_risk: Optional[bool] = None,
+) -> PolicyDecision:
     """
     Rules:
     - If AUTO_EXECUTE_HIGH_RISK is True, skip all confirmations (execute immediately).
@@ -118,7 +123,8 @@ def decide_confirmation(actor: Actor, planned_calls: List[PlannedToolCall]) -> P
         return PolicyDecision(requires_confirmation=False, risk=worst, reasons=reasons)
 
     # Auto-execute mode: skip confirmation for all actions
-    if settings.AUTO_EXECUTE_HIGH_RISK:
+    effective_auto_execute = settings.AUTO_EXECUTE_HIGH_RISK if auto_execute_high_risk is None else bool(auto_execute_high_risk)
+    if effective_auto_execute:
         return PolicyDecision(requires_confirmation=False, risk=Risk.HIGH, reasons=reasons + ["auto-execute enabled"])
 
     # high-risk with confirmation required

@@ -21,6 +21,7 @@ from src.agent.assistant import VoiceAssistant
 from src.agent.tools import TOOLS as CHAT_TOOLS, TOOL_HANDLERS
 from src.database.database import SessionLocal
 from src.database.models import Task as TaskModel
+from src.utils.autonomy import get_auto_execute_high_risk
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -302,8 +303,12 @@ class RealtimeCallBridge:
                 continue
 
             risk, _ = tool_risk(tool_name)
-            # Check if auto-execute is enabled
-            auto_execute = getattr(settings, "AUTO_EXECUTE_HIGH_RISK", True)
+            # Check if auto-execute is enabled (DB override if present)
+            _db = SessionLocal()
+            try:
+                auto_execute = get_auto_execute_high_risk(_db)
+            finally:
+                _db.close()
             
             if risk == Risk.LOW or auto_execute:
                 # Execute immediately (LOW-risk tools, or HIGH-risk with auto-execute enabled)

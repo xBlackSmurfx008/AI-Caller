@@ -74,7 +74,10 @@ async def gmail_oauth_callback(request: Request, code: str, state: Optional[str]
     try:
         base = str(request.base_url).rstrip("/")
         redirect_uri = f"{base}/api/gmail/oauth/callback"
+        logger.info("gmail_oauth_callback_received", code_length=len(code), state=state, redirect_uri=redirect_uri)
+        
         finish_gmail_oauth(redirect_uri=redirect_uri, code=code, state=state)
+        logger.info("gmail_oauth_token_saved_successfully")
         
         # Redirect back to frontend
         frontend_base = state
@@ -83,10 +86,12 @@ async def gmail_oauth_callback(request: Request, code: str, state: Optional[str]
                 frontend_base = settings.FRONTEND_URL
             else:
                 frontend_base = "http://localhost:5173"
-                
-        return RedirectResponse(f"{frontend_base}/oauth/callback?code=success")
+        
+        # Include service=gmail so frontend knows which service completed
+        return RedirectResponse(f"{frontend_base}/oauth/callback?code=success&service=gmail")
     except Exception as e:
-        logger.error("gmail_oauth_failed", error=str(e))
+        import traceback
+        logger.error("gmail_oauth_failed", error=str(e), traceback=traceback.format_exc())
         
         # Redirect with error
         frontend_base = state
@@ -95,8 +100,10 @@ async def gmail_oauth_callback(request: Request, code: str, state: Optional[str]
                 frontend_base = settings.FRONTEND_URL
             else:
                 frontend_base = "http://localhost:5173"
-                
-        return RedirectResponse(f"{frontend_base}/oauth/callback?error={str(e)}")
+        
+        # URL encode the error message
+        from urllib.parse import quote
+        return RedirectResponse(f"{frontend_base}/oauth/callback?error={quote(str(e))}&service=gmail")
 
 
 @router.post("/send")

@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Loader2, Sparkles, Shield, Zap, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { api } from '@/lib/api';
 
 type AutonomyLevel = 'cautious' | 'balanced' | 'autopilot';
 
@@ -66,23 +67,64 @@ export const AIAutonomySettings = () => {
   const [selectedLevel, setSelectedLevel] = useState<AutonomyLevel>('balanced');
   const [saving, setSaving] = useState(false);
   const [customSettings, setCustomSettings] = useState(PRESETS[1].settings);
+  const [loading, setLoading] = useState(true);
+  const [autoExecuteHighRisk, setAutoExecuteHighRisk] = useState(false);
 
   const handleSelectPreset = (level: AutonomyLevel) => {
     setSelectedLevel(level);
     const preset = PRESETS.find((p) => p.level === level);
     if (preset) {
       setCustomSettings(preset.settings);
+      // Map presets to the only currently-enforced backend switch:
+      // if we do NOT require approval for messages, we treat that as auto-execute high-risk.
+      setAutoExecuteHighRisk(!preset.settings.requireApprovalForMessages);
     }
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const res = await api.get('/api/settings/ai-autonomy');
+        if (cancelled) return;
+        const level = (res.data?.level as AutonomyLevel) || 'balanced';
+        setSelectedLevel(level);
+        setAutoExecuteHighRisk(!!res.data?.auto_execute_high_risk);
+        const preset = PRESETS.find((p) => p.level === level);
+        setCustomSettings((res.data?.settings as any) || preset?.settings || PRESETS[1].settings);
+      } catch {
+        // Fallback to localStorage for dev
+        const storedLevel = (localStorage.getItem('ai_autonomy_level') as AutonomyLevel) || 'balanced';
+        setSelectedLevel(storedLevel);
+        const stored = localStorage.getItem('ai_autonomy_settings');
+        if (stored) {
+          try {
+            setCustomSettings(JSON.parse(stored));
+          } catch {}
+        }
+        const preset = PRESETS.find((p) => p.level === storedLevel);
+        if (preset) setAutoExecuteHighRisk(!preset.settings.requireApprovalForMessages);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      // This would save to API endpoint
-      // For now, store in localStorage as a fallback
+      await api.post('/api/settings/ai-autonomy', {
+        level: selectedLevel,
+        auto_execute_high_risk: autoExecuteHighRisk,
+        settings: customSettings,
+      });
       localStorage.setItem('ai_autonomy_level', selectedLevel);
       localStorage.setItem('ai_autonomy_settings', JSON.stringify(customSettings));
-      toast.success('AI autonomy settings saved');
+      toast.success('AI autonomy settings saved (server + local)');
     } catch (error: any) {
       toast.error('Failed to save settings');
     } finally {
@@ -91,6 +133,16 @@ export const AIAutonomySettings = () => {
   };
 
   const currentPreset = PRESETS.find((p) => p.level === selectedLevel);
+
+  if (loading) {
+    return (
+      <Card className="bg-slate-900/50 border-slate-700">
+        <CardContent className="flex items-center justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="bg-slate-900/50 border-slate-700">
@@ -147,6 +199,15 @@ export const AIAutonomySettings = () => {
           <div className="bg-slate-800/50 rounded-lg p-4 space-y-3">
             <h4 className="font-semibold text-white mb-3">Current Settings</h4>
             <div className="space-y-2 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-300">Auto-execute high-risk actions</span>
+                <span className={`font-medium ${autoExecuteHighRisk ? 'text-red-300' : 'text-emerald-400'}`}>
+                  {autoExecuteHighRisk ? 'Enabled (danger)' : 'Disabled (recommended)'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500">
+                This is the only autonomy switch currently enforced by the backend (affects calls/SMS/email/calendar).
+              </p>
               <div className="flex items-center justify-between">
                 <span className="text-slate-300">Require approval for messages</span>
                 <span
@@ -214,8 +275,7 @@ export const AIAutonomySettings = () => {
                 Autopilot Mode Warning
               </p>
               <p className="text-xs text-amber-300">
-                Autopilot mode gives AI maximum autonomy. Ensure you have budget limits and
-                monitoring in place. Review the audit log regularly.
+                Autopilot enables auto-execution of high-risk actions. Use budgets and approvals if you want safety.
               </p>
             </div>
           </div>
